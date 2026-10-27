@@ -1,0 +1,57 @@
+# ===================================================================
+# tClavis - Git Ignore
+# ===================================================================
+
+# Pasta de uso exclusivo local (planejamentos, rascunhos, notas e arquivos privados)
+/_local/
+/_private/
+/_dev/
+
+# Dependências
+node_modules/
+.pnp
+.pnp.js
+
+# Saídas de Build e Empacotamento Desktop (Electron / Vite)
+dist/
+dist-electron/
+build/
+out/
+release/
+*.exe
+*.msi
+*.dmg
+*.AppImage
+*.deb
+
+# Banco de dados local e dados em runtime (contêm dados dos roteadores em teste)
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+/data/
+
+# Arquivos de ambiente e segredos locais
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Sistema Operacional
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDEs
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
