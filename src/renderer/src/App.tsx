@@ -8,22 +8,23 @@ import {
   Ticket,
   Plus,
   RefreshCw,
-  Key,
-  Shield,
-  Zap,
+  ShieldAlert,
+  ShieldCheck,
+  Tv,
 } from 'lucide-react';
-import { RouterDevice, HotspotUser, LogicalGroup, LogicalServer } from '../../shared/types';
+import { RouterDevice, HotspotUser, LogicalGroup, LogicalServer, ParityDiscrepancy, IpBinding } from '../../shared/types';
 import { DashboardView } from './views/DashboardView';
 import { UsersView } from './views/UsersView';
 import { RoutersView } from './views/RoutersView';
 import { MappingView } from './views/MappingView';
 import { ActiveSessionsView } from './views/ActiveSessionsView';
 import { VouchersView } from './views/VouchersView';
+import { IpBindingView } from './views/IpBindingView';
 import { CreateUserModal } from './components/CreateUserModal';
 import { CreateRouterModal } from './components/CreateRouterModal';
 import { CreateMappingModal } from './components/CreateMappingModal';
+import { ParityAuditModal } from './components/ParityAuditModal';
 
-// Type declaration for window.tclavisAPI
 declare global {
   interface Window {
     tclavisAPI?: any;
@@ -42,6 +43,7 @@ export default function App() {
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [isRouterModalOpen, setIsRouterModalOpen] = useState(false);
   const [isMappingModalOpen, setIsMappingModalOpen] = useState(false);
+  const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
 
   // Load all initial data
   const loadData = async () => {
@@ -66,6 +68,14 @@ export default function App() {
 
   useEffect(() => {
     loadData();
+
+    // Listen to background sync updates
+    if (window.tclavisAPI?.onSyncUpdated) {
+      const unsubscribe = window.tclavisAPI.onSyncUpdated(() => {
+        loadData();
+      });
+      return () => unsubscribe();
+    }
   }, []);
 
   // Handlers
@@ -129,6 +139,29 @@ export default function App() {
   const handleFetchSessions = async () => {
     if (!window.tclavisAPI) return [];
     return window.tclavisAPI.getActiveSessions();
+  };
+
+  const handleRunAudit = async () => {
+    if (!window.tclavisAPI) return { timestamp: '', totalChecked: 0, totalDiscrepancies: 0, discrepancies: [] };
+    return window.tclavisAPI.runAudit();
+  };
+
+  const handleRepairDiscrepancies = async (discrepancies: ParityDiscrepancy[]) => {
+    if (!window.tclavisAPI) return 0;
+    return window.tclavisAPI.repairDiscrepancies(discrepancies);
+  };
+
+  const handleFetchBindings = async () => {
+    if (!window.tclavisAPI) return [];
+    return window.tclavisAPI.getIpBindings();
+  };
+
+  const handleSaveBinding = async (binding: Omit<IpBinding, 'id'>) => {
+    await window.tclavisAPI?.saveIpBinding(binding);
+  };
+
+  const handleDeleteBinding = async (macAddress: string) => {
+    await window.tclavisAPI?.deleteIpBinding(macAddress);
   };
 
   const onlineRoutersCount = routers.filter((r) => r.status === 'online').length;
@@ -232,19 +265,32 @@ export default function App() {
               <Ticket className="w-4 h-4" />
               <span>Gerador de Vouchers</span>
             </button>
+
+            <button
+              onClick={() => setCurrentView('bindings')}
+              className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition ${
+                currentView === 'bindings'
+                  ? 'bg-primary/10 text-primary border border-primary/20 shadow-glow-primary'
+                  : 'text-slate-400 hover:text-white hover:bg-surface-card'
+              }`}
+            >
+              <ShieldCheck className="w-4 h-4 text-accent-emerald" />
+              <span>Dispositivos (Bypass)</span>
+            </button>
           </nav>
         </div>
 
         {/* Sidebar Footer */}
-        <div className="p-4 border-t border-surface-border bg-surface-card/40">
-          <div className="flex items-center justify-between text-[11px] text-slate-400 mb-2">
-            <span>Sincronização</span>
-            <span className="text-accent-emerald font-medium">Ativa</span>
-          </div>
-          <div className="w-full bg-surface-border rounded-full h-1.5 overflow-hidden">
-            <div className="bg-primary h-1.5 rounded-full w-full animate-pulse" />
-          </div>
-          <div className="mt-3 text-[10px] text-slate-500 font-mono text-center">
+        <div className="p-4 border-t border-surface-border bg-surface-card/40 space-y-2">
+          <button
+            onClick={() => setIsAuditModalOpen(true)}
+            className="w-full px-3 py-2 rounded-xl bg-accent-amber/10 hover:bg-accent-amber/20 border border-accent-amber/20 text-accent-amber text-xs font-semibold transition flex items-center justify-center space-x-1.5"
+          >
+            <ShieldAlert className="w-3.5 h-3.5" />
+            <span>Auditoria de Paridade</span>
+          </button>
+
+          <div className="text-[10px] text-slate-500 font-mono text-center pt-1">
             tClavis v1.0.0 Desktop • RouterOS
           </div>
         </div>
@@ -263,6 +309,14 @@ export default function App() {
           </div>
 
           <div className="flex items-center space-x-3">
+            <button
+              onClick={() => setIsAuditModalOpen(true)}
+              className="px-3.5 py-1.5 rounded-xl bg-accent-amber/10 hover:bg-accent-amber/20 border border-accent-amber/30 text-accent-amber text-xs font-semibold transition flex items-center space-x-1.5"
+            >
+              <ShieldAlert className="w-3.5 h-3.5" />
+              <span>Auditar Paridade</span>
+            </button>
+
             <button
               onClick={loadData}
               title="Recarregar dados"
@@ -341,6 +395,15 @@ export default function App() {
               onBatchCreateUsers={handleBatchCreateUsers}
             />
           )}
+
+          {currentView === 'bindings' && (
+            <IpBindingView
+              routers={routers}
+              onFetchBindings={handleFetchBindings}
+              onSaveBinding={handleSaveBinding}
+              onDeleteBinding={handleDeleteBinding}
+            />
+          )}
         </main>
       </div>
 
@@ -367,6 +430,14 @@ export default function App() {
         onSave={handleSaveGroup}
         routers={routers}
         onInspectRouter={(r) => window.tclavisAPI?.inspectRouter(r)}
+      />
+
+      <ParityAuditModal
+        isOpen={isAuditModalOpen}
+        onClose={() => setIsAuditModalOpen(false)}
+        onRunAudit={handleRunAudit}
+        onRepair={handleRepairDiscrepancies}
+        onRefreshData={loadData}
       />
     </div>
   );

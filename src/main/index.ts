@@ -2,11 +2,13 @@ import { app, BrowserWindow, ipcMain } from 'electron';
 import * as path from 'path';
 import { AppDatabase } from './db/database';
 import { SyncEngine } from './mikrotik/sync-engine';
-import { RouterDevice, LogicalGroup, LogicalServer, HotspotUser } from '../shared/types';
+import { SyncWorker } from './services/sync-worker';
+import { RouterDevice, LogicalGroup, LogicalServer, HotspotUser, ParityDiscrepancy, IpBinding } from '../shared/types';
 
 let mainWindow: BrowserWindow | null = null;
 let db: AppDatabase;
 let syncEngine: SyncEngine;
+let syncWorker: SyncWorker;
 
 async function createWindow() {
   mainWindow = new BrowserWindow({
@@ -59,16 +61,30 @@ function registerIpcHandlers() {
   ipcMain.handle('users:get', async () => db.getUsers());
   ipcMain.handle('users:save', async (_, user: HotspotUser) => {
     db.addUser(user);
-    // Automatically trigger cluster sync in background
     syncEngine.syncUserToCluster(user).catch((err) => console.error('Sync error:', err));
   });
   ipcMain.handle('users:sync', async (_, user: HotspotUser) => syncEngine.syncUserToCluster(user));
   ipcMain.handle('users:delete', async (_, user: HotspotUser) => syncEngine.deleteUserFromCluster(user));
 
+  // Parity Audit
+  ipcMain.handle('audit:run', async () => syncEngine.runParityAudit());
+  ipcMain.handle('audit:repair', async (_, discrepancies: ParityDiscrepancy[]) =>
+    syncEngine.repairDiscrepancies(discrepancies)
+  );
+
   // Sessions
   ipcMain.handle('sessions:get', async () => syncEngine.getActiveSessions());
   ipcMain.handle('sessions:kick', async (_, routerId: string, sessionId: string) =>
     syncEngine.kickSession(routerId, sessionId)
+  );
+
+  // IP & MAC Bindings
+  ipcMain.handle('bindings:get', async () => syncEngine.getIpBindings());
+  ipcMain.handle('bindings:save', async (_, binding: Omit<IpBinding, 'id'>) =>
+    syncEngine.addIpBinding(binding)
+  );
+  ipcMain.handle('bindings:delete', async (_, macAddress: string) =>
+    syncEngine.deleteIpBinding(macAddress)
   );
 
   // Stats
@@ -99,6 +115,9 @@ app.whenReady().then(async () => {
   await db.initialize();
   syncEngine = new SyncEngine(db);
 
+  syncWorker = new SyncWorker(db, syncEngine, () => mainWindow);
+  syncWorker.start(30000); // Poll every 30 seconds
+
   registerIpcHandlers();
   await createWindow();
 
@@ -108,6 +127,7 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
+  if (syncWorker) syncWorker.stop();
   if (process.platform !== 'darwin') {
     app.quit();
   }

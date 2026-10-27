@@ -2,6 +2,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import initSqlJs, { Database as SqlJsDatabase } from 'sql.js';
 import { RouterDevice, LogicalGroup, LogicalServer, HotspotUser, SyncQueueItem } from '../../shared/types';
+import { CredentialVault } from '../security/crypto';
 
 export class AppDatabase {
   private db: SqlJsDatabase | null = null;
@@ -279,6 +280,10 @@ export class AppDatabase {
 
   public addRouter(router: RouterDevice): void {
     if (!this.db) return;
+    const encryptedPass = router.passwordEncrypted.includes(':') 
+      ? router.passwordEncrypted 
+      : CredentialVault.encrypt(router.passwordEncrypted);
+
     this.db.run(
       `INSERT OR REPLACE INTO routers 
        (id, name, host, port, use_ssl, username, password_encrypted, status, latency_ms, routeros_version, cpu_load, uptime, last_seen, last_error) 
@@ -290,7 +295,7 @@ export class AppDatabase {
         router.port,
         router.useSsl ? 1 : 0,
         router.username,
-        router.passwordEncrypted,
+        encryptedPass,
         router.status,
         router.latencyMs || 0,
         router.routerOsVersion || '',

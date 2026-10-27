@@ -84,3 +84,34 @@ export interface SystemStats {
   totalRouters: number;
   activeSessionsCount: number;
 }
+
+export interface ParityDiscrepancy {
+  id: string;
+  type: 'missing_in_router' | 'orphan_in_router' | 'profile_mismatch' | 'disabled_mismatch';
+  username: string;
+  routerId: string;
+  routerName: string;
+  expectedValue: string;
+  actualValue: string;
+  suggestedAction: string;
+}
+
+export interface AuditReport {
+  timestamp: string;
+  totalChecked: number;
+  totalDiscrepancies: number;
+  discrepancies: ParityDiscrepancy[];
+}
+
+export interface IpBinding {
+  id: string;
+  routerId: string;
+  routerName?: string;
+  macAddress: string;
+  address?: string;
+  toAddress?: string;
+  server?: string;
+  type: 'bypassed' | 'regular' | 'blocked';
+  comment?: string;
+  disabled: boolean;
+}
