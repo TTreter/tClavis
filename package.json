@@ -3,6 +3,7 @@
   "version": "2.1.0",
   "description": "tClavis - MikroTik Hotspot Multi-Router Sync Manager",
   "author": "Tiago Treter",
+  "license": "MIT",
   "main": "dist-electron/main/index.js",
   "type": "commonjs",
   "scripts": {
