@@ -151,8 +151,15 @@ function registerIpcHandlers() {
   );
 
   // Backup & Restore
-  ipcMain.handle('backup:export', async () => db.exportBackup());
-  ipcMain.handle('backup:import', async (_, jsonContent: string) => db.importBackup(jsonContent));
+  ipcMain.handle('backup:export', async (_, passphrase?: string) => db.exportBackup(passphrase));
+  ipcMain.handle('backup:import', async (_, jsonContent: string, passphrase?: string) =>
+    db.importBackup(jsonContent, passphrase)
+  );
+  ipcMain.handle('demo:clear', async () => db.clearDemoData());
+
+  // System Logs & Activity Feed
+  ipcMain.handle('logs:get', async (_, limit?: number) => db.getLogs(limit || 100));
+  ipcMain.handle('logs:clear', async () => db.clearLogs());
 
   // Stats
   ipcMain.handle('stats:get', async () => {

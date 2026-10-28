@@ -1,7 +1,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import initSqlJs, { Database as SqlJsDatabase } from 'sql.js';
-import { RouterDevice, LogicalGroup, LogicalServer, HotspotUser, SyncQueueItem, DiscoveredRouterUser, ImportUsersBatchOptions } from '../../shared/types';
+import { RouterDevice, LogicalGroup, LogicalServer, HotspotUser, SyncQueueItem, DiscoveredRouterUser, ImportUsersBatchOptions, SystemAuditLog } from '../../shared/types';
 import { CredentialVault } from '../security/crypto';
 
 export class AppDatabase {
@@ -147,6 +147,15 @@ export class AppDatabase {
         created_at TEXT NOT NULL
       );
 
+      CREATE TABLE IF NOT EXISTS system_logs (
+        id TEXT PRIMARY KEY,
+        timestamp TEXT NOT NULL,
+        level TEXT NOT NULL,
+        category TEXT NOT NULL,
+        message TEXT NOT NULL,
+        details TEXT
+      );
+
       -- High-Performance Search & Foreign Key Indexes
       CREATE INDEX IF NOT EXISTS idx_users_group ON hotspot_users(logical_group_id);
       CREATE INDEX IF NOT EXISTS idx_users_username ON hotspot_users(username);
@@ -154,6 +163,7 @@ export class AppDatabase {
       CREATE INDEX IF NOT EXISTS idx_user_sync_status ON user_sync_status(user_id, router_id);
       CREATE INDEX IF NOT EXISTS idx_router_group_map ON router_group_mappings(logical_group_id, router_id);
       CREATE INDEX IF NOT EXISTS idx_router_server_map ON router_server_mappings(logical_server_id, router_id);
+      CREATE INDEX IF NOT EXISTS idx_logs_timestamp ON system_logs(timestamp);
     `);
 
     // Safe schema migrations for existing databases
@@ -835,23 +845,75 @@ export class AppDatabase {
     this.save();
   }
 
+  // --- System Audit Logs ---
+  public addLog(log: Omit<SystemAuditLog, 'id' | 'timestamp'>): void {
+    if (!this.db) return;
+    const id = `log_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const timestamp = new Date().toISOString();
+    this.db.run(
+      `INSERT INTO system_logs (id, timestamp, level, category, message, details) VALUES (?, ?, ?, ?, ?, ?)`,
+      [id, timestamp, log.level, log.category, log.message, log.details || '']
+    );
+    this.save();
+  }
+
+  public getLogs(limit = 100): SystemAuditLog[] {
+    if (!this.db) return [];
+    const res = this.db.exec(
+      `SELECT id, timestamp, level, category, message, details FROM system_logs ORDER BY timestamp DESC LIMIT ?;`,
+      [limit]
+    );
+    if (res.length === 0) return [];
+    return res[0].values.map((row) => ({
+      id: row[0] as string,
+      timestamp: row[1] as string,
+      level: row[2] as any,
+      category: row[3] as any,
+      message: row[4] as string,
+      details: (row[5] as string) || undefined,
+    }));
+  }
+
+  public clearLogs(): void {
+    if (!this.db) return;
+    this.db.run("DELETE FROM system_logs;");
+    this.save();
+  }
+
+  public clearDemoData(): void {
+    if (!this.db) return;
+    this.db.run("DELETE FROM hotspot_users WHERE id = 'usr-1';");
+    this.db.run("DELETE FROM user_sync_status WHERE user_id = 'usr-1';");
+    this.addLog({
+      level: 'info',
+      category: 'security',
+      message: 'Dados de demonstração removidos pelo operador.',
+    });
+    this.save();
+  }
+
   // --- Backup & Restore ---
-  public exportBackup(): string {
+  public exportBackup(passphrase?: string): string {
     const backupData = {
-      version: '1.1.0',
+      version: '2.0.0',
       exportedAt: new Date().toISOString(),
       routers: this.getRouters(),
       groups: this.getGroups(),
       servers: this.getServers(),
       users: this.getUsers(),
     };
-    return JSON.stringify(backupData, null, 2);
+    const rawJson = JSON.stringify(backupData, null, 2);
+    if (passphrase && passphrase.trim()) {
+      return CredentialVault.encryptBackup(rawJson, passphrase.trim());
+    }
+    return rawJson;
   }
 
-  public importBackup(jsonString: string): { success: boolean; importedCount: number } {
+  public importBackup(jsonString: string, passphrase?: string): { success: boolean; importedCount: number } {
     if (!this.db) return { success: false, importedCount: 0 };
     try {
-      const data = JSON.parse(jsonString);
+      const decryptedJson = CredentialVault.decryptBackup(jsonString, passphrase);
+      const data = JSON.parse(decryptedJson);
       let count = 0;
 
       if (Array.isArray(data.routers)) {
@@ -868,10 +930,16 @@ export class AppDatabase {
         count = data.users.length;
       }
 
+      this.addLog({
+        level: 'success',
+        category: 'sync',
+        message: `Restauração de backup concluída com ${count} usuários importados.`,
+      });
+
       return { success: true, importedCount: count };
-    } catch (err) {
+    } catch (err: any) {
       console.error('[tClavis DB] Import failed:', err);
-      throw new Error('Formato de arquivo de backup inválido.');
+      throw new Error(err.message || 'Formato de arquivo de backup inválido.');
     }
   }
 }

@@ -152,3 +152,12 @@ export interface DiscoveredNeighbor {
   interface?: string;
 }
 
+export interface SystemAuditLog {
+  id: string;
+  timestamp: string;
+  level: 'info' | 'warning' | 'error' | 'success';
+  category: 'user' | 'router' | 'sync' | 'security' | 'session';
+  message: string;
+  details?: string;
+}
+

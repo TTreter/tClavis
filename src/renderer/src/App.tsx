@@ -518,7 +518,7 @@ export default function App() {
           </button>
 
           <div className="text-[10px] text-slate-500 font-mono text-center pt-1">
-            tClavis v1.2.0 Desktop • RouterOS
+            tClavis v2.0.0 Desktop • RouterOS
           </div>
         </div>
       </aside>
@@ -741,8 +741,8 @@ export default function App() {
       <BackupModal
         isOpen={isBackupModalOpen}
         onClose={() => setIsBackupModalOpen(false)}
-        onExport={() => window.tclavisAPI?.exportBackup()}
-        onImport={(json) => window.tclavisAPI?.importBackup(json)}
+        onExport={(pass) => window.tclavisAPI?.exportBackup(pass)}
+        onImport={(json, pass) => window.tclavisAPI?.importBackup(json, pass)}
         onNotify={showToast}
         onRefreshData={loadData}
       />

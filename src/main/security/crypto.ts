@@ -85,4 +85,62 @@ export class CredentialVault {
     // Unencrypted legacy fallback
     return cipherText;
   }
+
+  /**
+   * Password-protects a backup export using AES-256-GCM and Scrypt key derivation.
+   */
+  public static encryptBackup(jsonContent: string, passphrase: string): string {
+    const salt = crypto.randomBytes(16);
+    const key = crypto.scryptSync(passphrase, salt, 32);
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
+    let encrypted = cipher.update(jsonContent, 'utf8', 'base64');
+    encrypted += cipher.final('base64');
+    const authTag = cipher.getAuthTag();
+
+    const envelope = {
+      tclavisEncrypted: true,
+      version: '2.0.0',
+      salt: salt.toString('hex'),
+      iv: iv.toString('hex'),
+      authTag: authTag.toString('hex'),
+      data: encrypted,
+    };
+    return JSON.stringify(envelope, null, 2);
+  }
+
+  /**
+   * Decrypts an encrypted backup file using the user-provided passphrase.
+   */
+  public static decryptBackup(fileContent: string, passphrase?: string): string {
+    let parsed: any;
+    try {
+      parsed = JSON.parse(fileContent);
+    } catch {
+      return fileContent;
+    }
+
+    if (!parsed || !parsed.tclavisEncrypted) {
+      return fileContent;
+    }
+
+    if (!passphrase) {
+      throw new Error('Este backup está protegido por senha. Informe a senha para restaurar.');
+    }
+
+    try {
+      const salt = Buffer.from(parsed.salt, 'hex');
+      const iv = Buffer.from(parsed.iv, 'hex');
+      const authTag = Buffer.from(parsed.authTag, 'hex');
+      const key = crypto.scryptSync(passphrase, salt, 32);
+
+      const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
+      decipher.setAuthTag(authTag);
+      let decrypted = decipher.update(parsed.data, 'base64', 'utf8');
+      decrypted += decipher.final('utf8');
+      return decrypted;
+    } catch (err) {
+      throw new Error('Senha incorreta ou arquivo de backup corrompido.');
+    }
+  }
 }

@@ -11,6 +11,7 @@ import {
   ImportUsersBatchOptions,
   CreateProfileResult,
   DiscoveredNeighbor,
+  SystemAuditLog,
 } from '../shared/types';
 
 export const tclavisAPI = {
@@ -74,9 +75,19 @@ export const tclavisAPI = {
     ipcRenderer.invoke('bindings:delete', macAddress),
 
   // Backup & Restore
-  exportBackup: (): Promise<string> => ipcRenderer.invoke('backup:export'),
-  importBackup: (jsonContent: string): Promise<{ success: boolean; importedCount: number }> =>
-    ipcRenderer.invoke('backup:import', jsonContent),
+  exportBackup: (passphrase?: string): Promise<string> =>
+    ipcRenderer.invoke('backup:export', passphrase),
+  importBackup: (
+    jsonContent: string,
+    passphrase?: string
+  ): Promise<{ success: boolean; importedCount: number }> =>
+    ipcRenderer.invoke('backup:import', jsonContent, passphrase),
+  clearDemoData: (): Promise<void> => ipcRenderer.invoke('demo:clear'),
+
+  // System Audit Logs
+  getLogs: (limit?: number): Promise<SystemAuditLog[]> =>
+    ipcRenderer.invoke('logs:get', limit),
+  clearLogs: (): Promise<void> => ipcRenderer.invoke('logs:clear'),
 
   // System Stats
   getStats: (): Promise<any> => ipcRenderer.invoke('stats:get'),

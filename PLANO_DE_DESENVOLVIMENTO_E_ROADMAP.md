@@ -195,12 +195,12 @@ Este documento consolida:
 ### 🛡️ ETAPA 6: Auditoria Contínua, Logs de Atividade e Segurança de Backups
 *Meta: Atender a requisitos de compliance corporativo, rastreabilidade e recuperação de desastres.*
 
-- [ ] **6.1** Criar tela de **Logs de Auditoria & Eventos** com tabela filtrável por data, tipo de ação e status.
-- [ ] **6.2** Registrar todo evento operacional (criação de usuário, edição de senha, expurgo de órfãos, queda de roteador, kick).
-- [ ] **6.3** Adicionar agendador de Auditoria de Paridade em segundo plano (ex: a cada 6 ou 12 horas) com notificações nativas do sistema operacional no caso de divergências.
-- [ ] **6.4** Implementar exportação de backup protegida por senha com derivação de chave AES-256 (Argon2 ou PBKDF2).
-- [ ] **6.5** Implementar rotina de importação de backup independente da máquina de origem, solicitando a senha mestra se o arquivo estiver cifrado.
-- [ ] **6.6** Adicionar opção de "Limpar Dados de Demonstração" nas configurações para novas instalações limpas.
+- [x] **6.1** Criar tela e rotinas de **Logs de Auditoria & Eventos** com tabela filtrável por data, tipo de ação e status.
+- [x] **6.2** Registrar todo evento operacional (criação de usuário, edição de senha, expurgo de órfãos, queda de roteador, kick).
+- [x] **6.3** Adicionar agendador de Auditoria de Paridade em segundo plano com notificações nativas do sistema operacional no caso de divergências.
+- [x] **6.4** Implementar exportação de backup protegida por senha com derivação de chave AES-256 (Scrypt + GCM).
+- [x] **6.5** Implementar rotina de importação de backup independente da máquina de origem, solicitando a senha mestra se o arquivo estiver cifrado.
+- [x] **6.6** Adicionar opção de "Limpar Dados de Demonstração" nas configurações para novas instalações limpas.
 
 ---
 
