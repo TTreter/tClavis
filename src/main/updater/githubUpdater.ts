@@ -57,9 +57,20 @@ export class GitHubUpdater {
       let assetSize: number | undefined;
 
       if (data.assets && Array.isArray(data.assets)) {
-        const exeAsset = data.assets.find(
-          (a: any) => a.name && a.name.toLowerCase().endsWith('.exe')
+        // Priorizar expressamente o instalador oficial (Setup / Installer)
+        const setupAsset = data.assets.find(
+          (a: any) =>
+            a.name &&
+            a.name.toLowerCase().endsWith('.exe') &&
+            (a.name.toLowerCase().includes('setup') || a.name.toLowerCase().includes('installer'))
         );
+
+        const exeAsset =
+          setupAsset ||
+          data.assets.find(
+            (a: any) => a.name && a.name.toLowerCase().endsWith('.exe')
+          );
+
         if (exeAsset) {
           downloadUrl = exeAsset.browser_download_url;
           assetName = exeAsset.name;
@@ -133,7 +144,10 @@ export class GitHubUpdater {
       child.unref();
 
       (app as any).isQuitting = true;
-      app.quit();
+      // Garante encerramento completo e imediato para liberar executáveis em disco
+      setTimeout(() => {
+        app.exit(0);
+      }, 500);
       return true;
     } catch (err: any) {
       console.error('[GitHubUpdater] Erro ao iniciar instalador:', err);
