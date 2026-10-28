@@ -7,11 +7,12 @@
   "type": "commonjs",
   "scripts": {
     "dev": "node scripts/dev.js",
+    "build:icon": "electron scripts/render-icon.js",
     "build:electron": "node scripts/build-electron.js",
     "build:renderer": "vite build",
-    "build": "npm run build:renderer && npm run build:electron && electron-builder",
-    "pack:portable": "npm run build:renderer && npm run build:electron && electron-builder --win portable",
-    "pack:dir": "npm run build:renderer && npm run build:electron && electron-builder --dir"
+    "build": "npm run build:icon && npm run build:renderer && npm run build:electron && electron-builder",
+    "pack:portable": "npm run build:icon && npm run build:renderer && npm run build:electron && electron-builder --win portable",
+    "pack:dir": "npm run build:icon && npm run build:renderer && npm run build:electron && electron-builder --dir"
   },
   "dependencies": {
     "clsx": "^2.1.1",

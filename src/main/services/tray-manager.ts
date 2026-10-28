@@ -10,7 +10,7 @@ export class TrayManager {
   ) {}
 
   public initialize(): void {
-    const iconPath = path.resolve(__dirname, '../../tclavis-icon.svg');
+    const iconPath = path.resolve(__dirname, '../../build/icon.png');
     let image = nativeImage.createFromPath(iconPath);
     if (image.isEmpty()) {
       image = nativeImage.createFromBuffer(

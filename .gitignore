@@ -15,7 +15,9 @@ node_modules/
 # Saídas de Build e Empacotamento Desktop (Electron / Vite)
 dist/
 dist-electron/
-build/
+build/*
+!build/icon.ico
+!build/icon.png
 out/
 release/
 *.exe

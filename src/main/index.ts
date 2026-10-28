@@ -13,6 +13,10 @@ let syncWorker: SyncWorker;
 let trayManager: TrayManager;
 
 async function createWindow() {
+  const iconPath = process.platform === 'win32'
+    ? path.resolve(__dirname, '../../build/icon.ico')
+    : path.resolve(__dirname, '../../build/icon.png');
+
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 840,
@@ -20,7 +24,7 @@ async function createWindow() {
     minHeight: 700,
     backgroundColor: '#090d16',
     title: 'tClavis — MikroTik Hotspot Sync',
-    icon: path.resolve(__dirname, '../../tclavis-icon.svg'),
+    icon: iconPath,
     webPreferences: {
       preload: path.resolve(__dirname, '../preload/index.js'),
       contextIsolation: true,
