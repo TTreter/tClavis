@@ -22,6 +22,10 @@
   <img src="https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript" alt="TypeScript" />
 </p>
 
+<p align="center">
+  <img src="docs/screenshots/dashboard.png" alt="tClavis Dashboard" width="850" />
+</p>
+
 ---
 
 ## 📖 Visão Geral
@@ -29,6 +33,24 @@
 O **tClavis** é uma aplicação desktop desenvolvida para resolver de forma definitiva a administração de redes Wi-Fi e Hotspot baseadas em múltiplos roteadores **MikroTik RouterOS**. 
 
 Em ambientes corporativos, pousadas, escolas, eventos ou provedores com mais de uma caixa MikroTik, manter usuários, senhas e vouchers sincronizados manualmente exige esforço duplicado ou a configuração onerosa e complexa de servidores RADIUS externos. O **tClavis** atua como uma camada de orquestração inteligente que mantém todo o cluster perfeitamente alinhado em tempo real.
+
+---
+
+## 📸 Capturas de Tela
+
+### 📊 Painel Geral (Dashboard)
+Interface moderna em modo escuro com visão unificada do cluster, contadores de roteadores online, usuários de hotspot sincronizados, regras de mapeamento e fila de sincronização em tempo real.
+
+<p align="center">
+  <img src="docs/screenshots/dashboard.png" alt="Painel Geral tClavis" width="850" />
+</p>
+
+### 🔌 Conexão de Roteadores & Descoberta MNDP
+Assistente intuitivo para cadastrar caixas MikroTik via RouterOS API (TCP 8728 / SSL 8729), com recurso de escaneamento automático na rede local via protocolo MikroTik Neighbor Discovery Protocol (MNDP) e teste imediato de conectividade.
+
+<p align="center">
+  <img src="docs/screenshots/adicionar-roteador.png" alt="Adicionar MikroTik via API / MNDP" width="850" />
+</p>
 
 ---
 
