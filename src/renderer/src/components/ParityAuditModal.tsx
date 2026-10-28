@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, ShieldAlert, CheckCircle2, RefreshCw, Wrench, AlertTriangle, ArrowRight } from 'lucide-react';
+import { X, ShieldAlert, CheckCircle2, RefreshCw, Wrench, AlertTriangle, ArrowRight, DownloadCloud } from 'lucide-react';
 import { AuditReport, ParityDiscrepancy } from '../../../shared/types';
 
 interface Props {
@@ -46,11 +46,24 @@ export const ParityAuditModal: React.FC<Props> = ({
     setRepairing(true);
     try {
       const repaired = await onRepair(report.discrepancies);
-      alert(`✅ Sucesso! ${repaired} divergência(s) foram corrigidas nos roteadores.`);
+      alert(`✅ Sucesso! ${repaired} divergência(s) foram corrigidas/importadas.`);
       await onRefreshData();
       await executeAudit();
     } catch (err: any) {
       alert('Erro na reparação: ' + err.message);
+    } finally {
+      setRepairing(false);
+    }
+  };
+
+  const handleRepairSingle = async (disc: ParityDiscrepancy) => {
+    setRepairing(true);
+    try {
+      const repaired = await onRepair([disc]);
+      await onRefreshData();
+      await executeAudit();
+    } catch (err: any) {
+      alert('Erro ao corrigir divergência: ' + err.message);
     } finally {
       setRepairing(false);
     }
@@ -166,8 +179,30 @@ export const ParityAuditModal: React.FC<Props> = ({
                         </div>
                       </div>
 
-                      <div className="text-right">
-                        <span className="text-[11px] text-slate-400 block">{disc.suggestedAction}</span>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-[11px] text-slate-400 block mr-2">{disc.suggestedAction}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRepairSingle(disc)}
+                          disabled={repairing}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition ${
+                            disc.type === 'orphan_in_router'
+                              ? 'bg-primary hover:bg-primary-hover text-background shadow-glow-primary'
+                              : 'bg-surface hover:bg-surface-border border border-surface-border text-white'
+                          }`}
+                        >
+                          {disc.type === 'orphan_in_router' ? (
+                            <>
+                              <DownloadCloud className="w-3.5 h-3.5" />
+                              <span>Importar</span>
+                            </>
+                          ) : (
+                            <>
+                              <RefreshCw className="w-3.5 h-3.5" />
+                              <span>Corrigir</span>
+                            </>
+                          )}
+                        </button>
                       </div>
                     </div>
                   ))}
