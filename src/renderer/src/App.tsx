@@ -25,6 +25,7 @@ import { EditUserModal } from './components/EditUserModal';
 import { CreateRouterModal } from './components/CreateRouterModal';
 import { CreateMappingModal } from './components/CreateMappingModal';
 import { ParityAuditModal } from './components/ParityAuditModal';
+import { Logo } from './components/Logo';
 
 declare global {
   interface Window {
@@ -176,7 +177,7 @@ export default function App() {
         <div>
           {/* Logo Brand */}
           <div className="p-5 border-b border-surface-border flex items-center space-x-3">
-            <img src="/tclavis-icon.svg" alt="tClavis" className="w-9 h-9 object-contain" />
+            <Logo className="w-10 h-10 flex-shrink-0" />
             <div>
               <span className="font-extrabold text-base tracking-wider text-white">tCLAVIS</span>
               <span className="block text-[10px] text-primary font-mono tracking-widest uppercase">
