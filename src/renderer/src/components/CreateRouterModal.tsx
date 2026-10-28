@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { X, Network, ShieldCheck, Activity, CheckCircle, AlertTriangle } from 'lucide-react';
-import { RouterDevice } from '../../../shared/types';
+import { X, Network, ShieldCheck, Activity, CheckCircle, AlertTriangle, Radio, RefreshCw, Sparkles } from 'lucide-react';
+import { RouterDevice, DiscoveredNeighbor } from '../../../shared/types';
 
 interface Props {
   isOpen: boolean;
@@ -23,8 +23,35 @@ export const CreateRouterModal: React.FC<Props> = ({
   const [password, setPassword] = useState('');
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; latency?: number; version?: string; error?: string } | null>(null);
+  const [scanningMndp, setScanningMndp] = useState(false);
+  const [discoveredNeighbors, setDiscoveredNeighbors] = useState<DiscoveredNeighbor[]>([]);
 
   if (!isOpen) return null;
+
+  const handleScanMndp = async () => {
+    if (!window.tclavisAPI?.discoverRoutersMndp) return;
+    setScanningMndp(true);
+    setDiscoveredNeighbors([]);
+    try {
+      const list = await window.tclavisAPI.discoverRoutersMndp();
+      setDiscoveredNeighbors(list);
+    } catch (_) {
+    } finally {
+      setScanningMndp(false);
+    }
+  };
+
+  const handleSelectNeighbor = (neighbor: DiscoveredNeighbor) => {
+    setName(`${neighbor.identity} (${neighbor.board})`);
+    setHost(neighbor.ip);
+    if (neighbor.version) {
+      setTestResult({
+        success: true,
+        version: neighbor.version,
+        latency: 1,
+      });
+    }
+  };
 
   const handleTestConnection = async () => {
     if (!host || !username) {
@@ -93,6 +120,49 @@ export const CreateRouterModal: React.FC<Props> = ({
           <button onClick={onClose} className="text-slate-400 hover:text-white transition">
             <X className="w-5 h-5" />
           </button>
+        </div>
+
+        {/* MNDP Discovery Action */}
+        <div className="px-6 pt-4 pb-0">
+          <div className="p-3 bg-primary/5 border border-primary/20 rounded-xl flex items-center justify-between">
+            <div className="text-xs">
+              <span className="font-bold text-white block">Localizar MikroTik na Rede Local</span>
+              <span className="text-[11px] text-slate-400">Escaneia a LAN via MNDP (UDP 5678)</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleScanMndp}
+              disabled={scanningMndp}
+              className="px-3 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 border border-primary/30 text-primary text-xs font-semibold transition flex items-center space-x-1.5"
+            >
+              <Radio className={`w-3.5 h-3.5 ${scanningMndp ? 'animate-pulse text-accent-emerald' : ''}`} />
+              <span>{scanningMndp ? 'Buscando...' : 'Escanear LAN'}</span>
+            </button>
+          </div>
+
+          {discoveredNeighbors.length > 0 && (
+            <div className="mt-2 space-y-1.5 max-h-36 overflow-y-auto">
+              <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                MikroTiks Detectados (Clique para Preencher):
+              </div>
+              {discoveredNeighbors.map((nb, i) => (
+                <div
+                  key={i}
+                  onClick={() => handleSelectNeighbor(nb)}
+                  className="p-2 bg-surface-card hover:bg-primary/10 border border-surface-border hover:border-primary/40 rounded-lg cursor-pointer transition flex items-center justify-between text-xs"
+                >
+                  <div>
+                    <span className="font-bold text-white">{nb.identity}</span>
+                    <span className="text-slate-400 text-[11px] ml-1.5 font-mono">({nb.board})</span>
+                  </div>
+                  <div className="text-right font-mono">
+                    <span className="text-primary font-semibold">{nb.ip}</span>
+                    <span className="text-[10px] text-slate-500 ml-2">{nb.version}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Form Body */}

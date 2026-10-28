@@ -143,3 +143,12 @@ export interface CreateProfileResult {
   profileName?: string;
 }
 
+export interface DiscoveredNeighbor {
+  identity: string;
+  ip: string;
+  mac: string;
+  version: string;
+  board: string;
+  interface?: string;
+}
+

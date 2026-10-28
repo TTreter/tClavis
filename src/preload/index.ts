@@ -10,6 +10,7 @@ import {
   DiscoveredRouterUser,
   ImportUsersBatchOptions,
   CreateProfileResult,
+  DiscoveredNeighbor,
 } from '../shared/types';
 
 export const tclavisAPI = {
@@ -26,6 +27,8 @@ export const tclavisAPI = {
     rateLimit?: string
   ): Promise<CreateProfileResult> =>
     ipcRenderer.invoke('routers:create_profile', routerId, name, rateLimit),
+  discoverRoutersMndp: (): Promise<DiscoveredNeighbor[]> =>
+    ipcRenderer.invoke('routers:discover_mndp'),
 
   // Logical Groups (De-Para)
   getGroups: (): Promise<LogicalGroup[]> => ipcRenderer.invoke('groups:get'),

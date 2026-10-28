@@ -1,5 +1,6 @@
 import { AppDatabase } from '../db/database';
 import { RosClient } from './ros-client';
+import { RosRestClient } from './ros-rest-client';
 import { CredentialVault } from '../security/crypto';
 import {
   RouterDevice,
@@ -64,6 +65,15 @@ export class SyncEngine {
       existing.client.close();
       this.connectionPool.delete(routerId);
     }
+  }
+
+  public getRestClient(router: RouterDevice): RosRestClient {
+    return new RosRestClient({
+      host: router.host,
+      username: router.username,
+      password: this.getPlainPassword(router),
+      useSsl: router.useSsl,
+    });
   }
 
   public async testRouter(router: RouterDevice): Promise<{

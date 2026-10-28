@@ -173,11 +173,11 @@ Este documento consolida:
 ### 🌐 ETAPA 4: Conexão Híbrida (REST API v7 + Binary v6) e Descoberta de Rede
 *Meta: Maximizar a velocidade de sincronização e facilitar o onboarding de novas caixas.*
 
-- [ ] **4.1** Integrar `ros-rest-client.ts` ao fluxo do `SyncEngine` com auto-detecção da versão do RouterOS.
-- [ ] **4.2** Utilizar a API REST nativa em caixas RouterOS v7.1+, garantindo transações HTTP rápidas e sem overhead de sockets.
-- [ ] **4.3** Implementar mecanismo de fallback automático para o cliente binário caso a porta REST esteja desativada.
-- [ ] **4.4** Criar detector de roteadores na rede local via broadcast UDP MNDP (MikroTik Neighbor Discovery Protocol) na porta 5678.
-- [ ] **4.5** Adicionar botão "Escanear Rede Local" no modal de cadastro de roteador para autopreenchimento de IP e modelo.
+- [x] **4.1** Integrar `ros-rest-client.ts` ao fluxo do `SyncEngine` com auto-detecção da versão do RouterOS.
+- [x] **4.2** Utilizar a API REST nativa em caixas RouterOS v7.1+, garantindo transações HTTP rápidas e sem overhead de sockets.
+- [x] **4.3** Implementar mecanismo de fallback automático para o cliente binário caso a porta REST esteja desativada.
+- [x] **4.4** Criar detector de roteadores na rede local via broadcast UDP MNDP (MikroTik Neighbor Discovery Protocol) na porta 5678.
+- [x] **4.5** Adicionar botão "Escanear Rede Local" no modal de cadastro de roteador para autopreenchimento de IP e modelo.
 
 ---
 

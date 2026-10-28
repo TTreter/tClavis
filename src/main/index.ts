@@ -5,6 +5,7 @@ import { SyncEngine } from './mikrotik/sync-engine';
 import { SyncWorker } from './services/sync-worker';
 import { TrayManager } from './services/tray-manager';
 import { SecurityValidator } from './security/validator';
+import { MndpDiscovery } from './mikrotik/mndp-discovery';
 import { RouterDevice, LogicalGroup, LogicalServer, HotspotUser, ParityDiscrepancy, IpBinding, ImportUsersBatchOptions } from '../shared/types';
 
 let mainWindow: BrowserWindow | null = null;
@@ -67,6 +68,7 @@ function registerIpcHandlers() {
   ipcMain.handle('routers:create_profile', async (_, routerId: string, name: string, rateLimit?: string) =>
     syncEngine.createRouterProfile(routerId, name, rateLimit)
   );
+  ipcMain.handle('routers:discover_mndp', async () => MndpDiscovery.scan());
 
   // Groups
   ipcMain.handle('groups:get', async () => db.getGroups());
