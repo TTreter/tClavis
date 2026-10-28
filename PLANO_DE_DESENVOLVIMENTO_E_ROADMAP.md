@@ -158,15 +158,15 @@ Este documento consolida:
 ### 👥 ETAPA 3: Ações em Massa e Usabilidade da Tabela de Usuários
 *Meta: Proporcionar agilidade no gerenciamento de bases com centenas ou milhares de contas.*
 
-- [ ] **3.1** Adicionar coluna de seleção (checkbox) em cada linha da tabela de usuários.
-- [ ] **3.2** Adicionar checkbox no cabeçalho com suporte a "Selecionar Todos", "Limpar Seleção" e contador de selecionados.
-- [ ] **3.3** Implementar barra de ações flutuante ao selecionar um ou mais usuários:
-  - [ ] Exclusão em lote com confirmação única.
-  - [ ] Re-sincronização forçada dos usuários selecionados.
-  - [ ] Mudança de Grupo Lógico / Perfil em lote.
-  - [ ] Habilitação / Desabilitação rápida em lote.
-- [ ] **3.4** Adicionar filtro avançado por status de sincronização: "Todos", "100% Síncronos", "Com Pendências" ou "Com Erro".
-- [ ] **3.5** Implementar paginação ou virtualização de lista para manter performance fluida com mais de 5.000 usuários.
+- [x] **3.1** Adicionar coluna de seleção (checkbox) em cada linha da tabela de usuários.
+- [x] **3.2** Adicionar checkbox no cabeçalho com suporte a "Selecionar Todos", "Limpar Seleção" e contador de selecionados.
+- [x] **3.3** Implementar barra de ações flutuante ao selecionar um ou mais usuários:
+  - [x] Exclusão em lote com confirmação única.
+  - [x] Re-sincronização forçada dos usuários selecionados.
+  - [x] Mudança de Grupo Lógico / Perfil em lote.
+  - [x] Habilitação / Desabilitação rápida em lote.
+- [x] **3.4** Adicionar filtro avançado por status de sincronização: "Todos", "100% Síncronos", "Com Pendências" ou "Com Erro".
+- [x] **3.5** Implementar paginação ou virtualização de lista para manter performance fluida com mais de 5.000 usuários.
 
 ---
 

@@ -110,6 +110,11 @@ function registerIpcHandlers() {
 
   ipcMain.handle('users:sync', async (_, user: HotspotUser) => syncEngine.syncUserToCluster(user));
   ipcMain.handle('users:delete', async (_, user: HotspotUser) => syncEngine.deleteUserFromCluster(user));
+  ipcMain.handle('users:batch_delete', async (_, users: HotspotUser[]) => {
+    for (const u of users) {
+      await syncEngine.deleteUserFromCluster(u);
+    }
+  });
   ipcMain.handle('users:discover_from_router', async (_, routerId: string) =>
     syncEngine.importUsersFromRouter(routerId)
   );

@@ -282,6 +282,71 @@ export default function App() {
     }
   };
 
+  const handleBatchDeleteUsers = async (usersToDelete: HotspotUser[]) => {
+    try {
+      if (window.tclavisAPI?.deleteUsersBatch) {
+        await window.tclavisAPI.deleteUsersBatch(usersToDelete);
+      } else {
+        for (const u of usersToDelete) {
+          await window.tclavisAPI?.deleteUser(u);
+        }
+      }
+      await loadData();
+      showToast(`✅ ${usersToDelete.length} usuários removidos do cluster!`, 'success');
+    } catch (err: any) {
+      showToast('Erro ao remover em lote: ' + err.message, 'error');
+    }
+  };
+
+  const handleBatchSyncUsers = async (usersToSync: HotspotUser[]) => {
+    try {
+      for (const u of usersToSync) {
+        await window.tclavisAPI?.syncUser(u);
+      }
+      await loadData();
+      showToast(`🔄 ${usersToSync.length} usuários sincronizados!`, 'success');
+    } catch (err: any) {
+      showToast('Erro ao sincronizar em lote: ' + err.message, 'error');
+    }
+  };
+
+  const handleBatchUpdateGroup = async (usersToUpdate: HotspotUser[], groupId: string) => {
+    try {
+      const updated = usersToUpdate.map((u) => ({ ...u, logicalGroupId: groupId }));
+      if (window.tclavisAPI?.saveUsersBatch) {
+        await window.tclavisAPI.saveUsersBatch(updated);
+      } else {
+        for (const u of updated) {
+          await window.tclavisAPI?.saveUser(u);
+        }
+      }
+      await loadData();
+      showToast(`🛡️ Perfil atualizado para ${usersToUpdate.length} usuários!`, 'success');
+    } catch (err: any) {
+      showToast('Erro ao atualizar grupo: ' + err.message, 'error');
+    }
+  };
+
+  const handleBatchToggleDisabled = async (usersToToggle: HotspotUser[], disabled: boolean) => {
+    try {
+      const updated = usersToToggle.map((u) => ({ ...u, disabled }));
+      if (window.tclavisAPI?.saveUsersBatch) {
+        await window.tclavisAPI.saveUsersBatch(updated);
+      } else {
+        for (const u of updated) {
+          await window.tclavisAPI?.saveUser(u);
+        }
+      }
+      await loadData();
+      showToast(
+        `${usersToToggle.length} usuários ${disabled ? 'pausados/desabilitados' : 'ativados'}!`,
+        'info'
+      );
+    } catch (err: any) {
+      showToast('Erro ao alterar status: ' + err.message, 'error');
+    }
+  };
+
   const handleKickSession = async (routerId: string, sessionId: string) => {
     try {
       await window.tclavisAPI?.kickSession(routerId, sessionId);
@@ -547,6 +612,10 @@ export default function App() {
               onSyncUser={handleSyncUser}
               onSaveUser={handleSaveUser}
               onNavigateToRouters={() => setCurrentView('routers')}
+              onBatchDeleteUsers={handleBatchDeleteUsers}
+              onBatchSyncUsers={handleBatchSyncUsers}
+              onBatchUpdateGroup={handleBatchUpdateGroup}
+              onBatchToggleDisabled={handleBatchToggleDisabled}
             />
           )}
 

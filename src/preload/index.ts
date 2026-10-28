@@ -43,6 +43,8 @@ export const tclavisAPI = {
   saveUsersBatch: (users: HotspotUser[]): Promise<void> =>
     ipcRenderer.invoke('users:batch_save', users),
   deleteUser: (user: HotspotUser): Promise<void> => ipcRenderer.invoke('users:delete', user),
+  deleteUsersBatch: (users: HotspotUser[]): Promise<void> =>
+    ipcRenderer.invoke('users:batch_delete', users),
   syncUser: (user: HotspotUser): Promise<void> => ipcRenderer.invoke('users:sync', user),
   discoverUsersFromRouter: (routerId: string): Promise<DiscoveredRouterUser[]> =>
     ipcRenderer.invoke('users:discover_from_router', routerId),

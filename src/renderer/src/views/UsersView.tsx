@@ -1,5 +1,30 @@
-import React, { useState } from 'react';
-import { Search, Plus, Trash2, RefreshCw, Eye, EyeOff, Shield, Edit3, DownloadCloud, AlertTriangle, Network } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import {
+  Search,
+  Plus,
+  Trash2,
+  RefreshCw,
+  Eye,
+  EyeOff,
+  Shield,
+  Edit3,
+  DownloadCloud,
+  AlertTriangle,
+  Network,
+  CheckSquare,
+  Square,
+  MinusSquare,
+  ChevronLeft,
+  ChevronRight,
+  Filter,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  UserCheck,
+  UserX,
+  Layers,
+  X,
+} from 'lucide-react';
 import { HotspotUser, LogicalGroup, RouterDevice } from '../../../shared/types';
 
 interface Props {
@@ -13,6 +38,10 @@ interface Props {
   onSyncUser: (user: HotspotUser) => Promise<void>;
   onSaveUser: (user: HotspotUser) => Promise<void>;
   onNavigateToRouters?: () => void;
+  onBatchDeleteUsers?: (users: HotspotUser[]) => Promise<void>;
+  onBatchSyncUsers?: (users: HotspotUser[]) => Promise<void>;
+  onBatchUpdateGroup?: (users: HotspotUser[], groupId: string) => Promise<void>;
+  onBatchToggleDisabled?: (users: HotspotUser[], disabled: boolean) => Promise<void>;
 }
 
 export const UsersView: React.FC<Props> = ({
@@ -26,23 +55,171 @@ export const UsersView: React.FC<Props> = ({
   onSyncUser,
   onSaveUser,
   onNavigateToRouters,
+  onBatchDeleteUsers,
+  onBatchSyncUsers,
+  onBatchUpdateGroup,
+  onBatchToggleDisabled,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedGroupFilter, setSelectedGroupFilter] = useState('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'SYNCED' | 'PENDING' | 'ERROR' | 'DISABLED'>('ALL');
   const [revealedPasswords, setRevealedPasswords] = useState<Record<string, boolean>>({});
   const [syncingId, setSyncingId] = useState<string | null>(null);
+
+  // Selection & Batch State
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
+  const [batchActionLoading, setBatchActionLoading] = useState(false);
+  const [batchChangeGroupOpen, setBatchChangeGroupOpen] = useState(false);
+  const [targetBatchGroupId, setTargetBatchGroupId] = useState(groups[0]?.id || '');
+
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState<number>(25);
 
   const togglePasswordVisibility = (userId: string) => {
     setRevealedPasswords((prev) => ({ ...prev, [userId]: !prev[userId] }));
   };
 
-  const filteredUsers = users.filter((u) => {
-    const matchesSearch =
-      u.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (u.comment && u.comment.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesGroup = selectedGroupFilter === 'ALL' || u.logicalGroupId === selectedGroupFilter;
-    return matchesSearch && matchesGroup;
-  });
+  // Filtered list
+  const filteredUsers = useMemo(() => {
+    return users.filter((u) => {
+      const matchesSearch =
+        u.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (u.comment && u.comment.toLowerCase().includes(searchTerm.toLowerCase()));
+      const matchesGroup = selectedGroupFilter === 'ALL' || u.logicalGroupId === selectedGroupFilter;
+
+      let matchesStatus = true;
+      if (statusFilter === 'DISABLED') {
+        matchesStatus = u.disabled;
+      } else if (statusFilter === 'SYNCED') {
+        const statuses = Object.values(u.syncStatus);
+        matchesStatus = statuses.length > 0 && statuses.every((s) => s.status === 'synced');
+      } else if (statusFilter === 'PENDING') {
+        const statuses = Object.values(u.syncStatus);
+        matchesStatus = statuses.some((s) => s.status === 'pending');
+      } else if (statusFilter === 'ERROR') {
+        const statuses = Object.values(u.syncStatus);
+        matchesStatus = statuses.some((s) => s.status === 'error');
+      }
+
+      return matchesSearch && matchesGroup && matchesStatus;
+    });
+  }, [users, searchTerm, selectedGroupFilter, statusFilter]);
+
+  // Paginated slice
+  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage) || 1;
+  const paginatedUsers = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredUsers.slice(start, start + itemsPerPage);
+  }, [filteredUsers, currentPage, itemsPerPage]);
+
+  // Selection handlers
+  const isAllCurrentPageSelected =
+    paginatedUsers.length > 0 && paginatedUsers.every((u) => selectedUserIds.has(u.id));
+  const isSomeSelected =
+    paginatedUsers.some((u) => selectedUserIds.has(u.id)) && !isAllCurrentPageSelected;
+
+  const handleToggleSelectAll = () => {
+    if (isAllCurrentPageSelected) {
+      const next = new Set(selectedUserIds);
+      paginatedUsers.forEach((u) => next.delete(u.id));
+      setSelectedUserIds(next);
+    } else {
+      const next = new Set(selectedUserIds);
+      paginatedUsers.forEach((u) => next.add(u.id));
+      setSelectedUserIds(next);
+    }
+  };
+
+  const handleToggleUser = (id: string) => {
+    const next = new Set(selectedUserIds);
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      next.add(id);
+    }
+    setSelectedUserIds(next);
+  };
+
+  const handleClearSelection = () => {
+    setSelectedUserIds(new Set());
+  };
+
+  const selectedUsersList = useMemo(() => {
+    return users.filter((u) => selectedUserIds.has(u.id));
+  }, [users, selectedUserIds]);
+
+  // Batch action executions
+  const handleExecuteBatchDelete = async () => {
+    if (selectedUsersList.length === 0) return;
+    if (confirm(`Deseja realmente remover os ${selectedUsersList.length} usuários selecionados de todos os roteadores?`)) {
+      setBatchActionLoading(true);
+      try {
+        if (onBatchDeleteUsers) {
+          await onBatchDeleteUsers(selectedUsersList);
+        } else {
+          for (const u of selectedUsersList) {
+            await onDeleteUser(u);
+          }
+        }
+        setSelectedUserIds(new Set());
+      } finally {
+        setBatchActionLoading(false);
+      }
+    }
+  };
+
+  const handleExecuteBatchSync = async () => {
+    if (selectedUsersList.length === 0) return;
+    setBatchActionLoading(true);
+    try {
+      if (onBatchSyncUsers) {
+        await onBatchSyncUsers(selectedUsersList);
+      } else {
+        for (const u of selectedUsersList) {
+          await onSyncUser(u);
+        }
+      }
+      setSelectedUserIds(new Set());
+    } finally {
+      setBatchActionLoading(false);
+    }
+  };
+
+  const handleExecuteBatchToggleDisabled = async (disabled: boolean) => {
+    if (selectedUsersList.length === 0) return;
+    setBatchActionLoading(true);
+    try {
+      if (onBatchToggleDisabled) {
+        await onBatchToggleDisabled(selectedUsersList, disabled);
+      } else {
+        for (const u of selectedUsersList) {
+          await onSaveUser({ ...u, disabled });
+        }
+      }
+      setSelectedUserIds(new Set());
+    } finally {
+      setBatchActionLoading(false);
+    }
+  };
+
+  const handleExecuteBatchGroupChange = async () => {
+    if (selectedUsersList.length === 0 || !targetBatchGroupId) return;
+    setBatchActionLoading(true);
+    try {
+      if (onBatchUpdateGroup) {
+        await onBatchUpdateGroup(selectedUsersList, targetBatchGroupId);
+      } else {
+        for (const u of selectedUsersList) {
+          await onSaveUser({ ...u, logicalGroupId: targetBatchGroupId });
+        }
+      }
+      setBatchChangeGroupOpen(false);
+      setSelectedUserIds(new Set());
+    } finally {
+      setBatchActionLoading(false);
+    }
+  };
 
   const handleSyncClick = async (user: HotspotUser) => {
     setSyncingId(user.id);
@@ -87,24 +264,30 @@ export const UsersView: React.FC<Props> = ({
         </div>
       )}
 
-      {/* Action Header */}
+      {/* Action Header & Search Filters */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center space-x-3 flex-1 max-w-md">
-          <div className="relative w-full">
+        <div className="flex flex-wrap items-center gap-2 flex-1">
+          <div className="relative flex-1 min-w-[200px] max-w-sm">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               placeholder="Buscar por usuário ou comentário..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 bg-surface-card border border-surface-border rounded-xl text-white text-sm focus:outline-none focus:border-primary"
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full pl-9 pr-4 py-2 bg-surface-card border border-surface-border rounded-xl text-white text-xs focus:outline-none focus:border-primary"
             />
           </div>
 
           <select
             value={selectedGroupFilter}
-            onChange={(e) => setSelectedGroupFilter(e.target.value)}
-            className="px-3 py-2 bg-surface-card border border-surface-border rounded-xl text-white text-sm focus:outline-none focus:border-primary"
+            onChange={(e) => {
+              setSelectedGroupFilter(e.target.value);
+              setCurrentPage(1);
+            }}
+            className="px-3 py-2 bg-surface-card border border-surface-border rounded-xl text-white text-xs focus:outline-none focus:border-primary font-medium"
           >
             <option value="ALL">Todos os Grupos</option>
             {groups.map((g) => (
@@ -113,13 +296,28 @@ export const UsersView: React.FC<Props> = ({
               </option>
             ))}
           </select>
+
+          <select
+            value={statusFilter}
+            onChange={(e) => {
+              setStatusFilter(e.target.value as any);
+              setCurrentPage(1);
+            }}
+            className="px-3 py-2 bg-surface-card border border-surface-border rounded-xl text-white text-xs focus:outline-none focus:border-primary font-medium"
+          >
+            <option value="ALL">Status: Todos</option>
+            <option value="SYNCED">🟢 100% Síncronos</option>
+            <option value="PENDING">🟡 Com Pendências</option>
+            <option value="ERROR">🔴 Com Erros</option>
+            <option value="DISABLED">⏸️ Desabilitados</option>
+          </select>
         </div>
 
         <div className="flex items-center space-x-2">
           {hasRouters && (
             <button
               onClick={onOpenImport}
-              className="px-4 py-2 rounded-xl bg-surface-card hover:bg-surface-border border border-surface-border text-slate-200 hover:text-white font-semibold text-sm transition flex items-center space-x-2 shadow-lg"
+              className="px-3.5 py-2 rounded-xl bg-surface-card hover:bg-surface-border border border-surface-border text-slate-200 hover:text-white font-semibold text-xs transition flex items-center space-x-1.5 shadow"
             >
               <DownloadCloud className="w-4 h-4 text-primary" />
               <span>Importar do MikroTik</span>
@@ -130,7 +328,7 @@ export const UsersView: React.FC<Props> = ({
             onClick={hasRouters ? onOpenCreate : undefined}
             disabled={!hasRouters}
             title={!hasRouters ? 'Cadastre ao menos 1 roteador primeiro' : 'Criar novo usuário'}
-            className={`px-4 py-2 rounded-xl bg-primary hover:bg-primary-hover text-background font-semibold text-sm transition shadow-glow-primary flex items-center space-x-2 ${
+            className={`px-4 py-2 rounded-xl bg-primary hover:bg-primary-hover text-background font-semibold text-xs transition shadow-glow-primary flex items-center space-x-1.5 ${
               !hasRouters ? 'opacity-50 cursor-not-allowed' : ''
             }`}
           >
@@ -140,11 +338,125 @@ export const UsersView: React.FC<Props> = ({
         </div>
       </div>
 
+      {/* Floating Batch Operations Bar */}
+      {selectedUserIds.size > 0 && (
+        <div className="p-3 bg-primary/10 border border-primary/30 rounded-2xl flex flex-wrap items-center justify-between gap-3 shadow-glow-primary transition animate-fade-in">
+          <div className="flex items-center space-x-2.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse" />
+            <span className="text-xs font-bold text-white">
+              {selectedUserIds.size} usuário(s) selecionado(s)
+            </span>
+            <button
+              onClick={handleClearSelection}
+              className="text-[11px] text-slate-400 hover:text-white underline ml-2"
+            >
+              Limpar Seleção
+            </button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={handleExecuteBatchSync}
+              disabled={batchActionLoading}
+              className="px-3 py-1.5 rounded-xl bg-surface hover:bg-surface-border border border-surface-border text-slate-200 text-xs font-semibold transition flex items-center space-x-1.5"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${batchActionLoading ? 'animate-spin' : ''}`} />
+              <span>Sincronizar Lote</span>
+            </button>
+
+            <button
+              onClick={() => setBatchChangeGroupOpen(!batchChangeGroupOpen)}
+              disabled={batchActionLoading}
+              className="px-3 py-1.5 rounded-xl bg-surface hover:bg-surface-border border border-surface-border text-slate-200 text-xs font-semibold transition flex items-center space-x-1.5"
+            >
+              <Layers className="w-3.5 h-3.5 text-accent-purple" />
+              <span>Alterar Perfil</span>
+            </button>
+
+            <button
+              onClick={() => handleExecuteBatchToggleDisabled(false)}
+              disabled={batchActionLoading}
+              className="px-3 py-1.5 rounded-xl bg-accent-emerald/10 hover:bg-accent-emerald/20 border border-accent-emerald/30 text-accent-emerald text-xs font-semibold transition flex items-center space-x-1"
+            >
+              <UserCheck className="w-3.5 h-3.5" />
+              <span>Ativar</span>
+            </button>
+
+            <button
+              onClick={() => handleExecuteBatchToggleDisabled(true)}
+              disabled={batchActionLoading}
+              className="px-3 py-1.5 rounded-xl bg-accent-amber/10 hover:bg-accent-amber/20 border border-accent-amber/30 text-accent-amber text-xs font-semibold transition flex items-center space-x-1"
+            >
+              <UserX className="w-3.5 h-3.5" />
+              <span>Pausar</span>
+            </button>
+
+            <button
+              onClick={handleExecuteBatchDelete}
+              disabled={batchActionLoading}
+              className="px-3 py-1.5 rounded-xl bg-accent-rose/15 hover:bg-accent-rose/25 border border-accent-rose/30 text-accent-rose text-xs font-semibold transition flex items-center space-x-1"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Excluir Lote</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Inline Group Picker for Batch Action */}
+      {batchChangeGroupOpen && selectedUserIds.size > 0 && (
+        <div className="p-3 bg-surface-card border border-surface-border rounded-xl flex items-center space-x-3 text-xs">
+          <span className="text-slate-300 font-semibold whitespace-nowrap">
+            Novo Perfil para os {selectedUserIds.size} selecionados:
+          </span>
+          <select
+            value={targetBatchGroupId}
+            onChange={(e) => setTargetBatchGroupId(e.target.value)}
+            className="px-3 py-1 bg-surface border border-surface-border rounded-lg text-white text-xs focus:outline-none focus:border-primary"
+          >
+            {groups.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={handleExecuteBatchGroupChange}
+            disabled={batchActionLoading}
+            className="px-3 py-1 rounded-lg bg-primary hover:bg-primary-hover text-background font-semibold text-xs transition"
+          >
+            Aplicar Perfil
+          </button>
+          <button
+            onClick={() => setBatchChangeGroupOpen(false)}
+            className="text-slate-400 hover:text-white"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Users Table */}
       <div className="bg-surface-card border border-surface-border rounded-2xl overflow-hidden shadow-xl">
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="border-b border-surface-border bg-surface/50 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+              <th className="py-3 px-3 w-10 text-center">
+                <button
+                  type="button"
+                  onClick={handleToggleSelectAll}
+                  className="text-slate-400 hover:text-white transition"
+                  title={isAllCurrentPageSelected ? 'Desmarcar todos' : 'Selecionar todos nesta página'}
+                >
+                  {isAllCurrentPageSelected ? (
+                    <CheckSquare className="w-4 h-4 text-primary" />
+                  ) : isSomeSelected ? (
+                    <MinusSquare className="w-4 h-4 text-primary" />
+                  ) : (
+                    <Square className="w-4 h-4" />
+                  )}
+                </button>
+              </th>
               <th className="py-3 px-4">Usuário</th>
               <th className="py-3 px-4">Senha</th>
               <th className="py-3 px-4">Grupo Lógico</th>
@@ -154,9 +466,9 @@ export const UsersView: React.FC<Props> = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-surface-border text-sm">
-            {filteredUsers.length === 0 ? (
+            {paginatedUsers.length === 0 ? (
               <tr>
-                <td colSpan={6} className="py-16 text-center text-slate-400 text-sm">
+                <td colSpan={7} className="py-16 text-center text-slate-400 text-sm">
                   {!hasRouters ? (
                     <div className="space-y-3 max-w-sm mx-auto">
                       <Network className="w-10 h-10 text-slate-600 mx-auto" />
@@ -176,38 +488,51 @@ export const UsersView: React.FC<Props> = ({
                   ) : (
                     <div className="space-y-3 max-w-sm mx-auto">
                       <DownloadCloud className="w-10 h-10 text-slate-600 mx-auto" />
-                      <div className="font-semibold text-white">Nenhum usuário cadastrado no tClavis</div>
+                      <div className="font-semibold text-white">Nenhum usuário encontrado</div>
                       <div className="text-xs text-slate-400">
-                        Você pode criar um novo usuário ou recuperar usuários já existentes no MikroTik.
-                      </div>
-                      <div className="flex items-center justify-center space-x-3 pt-2">
-                        <button
-                          onClick={onOpenImport}
-                          className="px-3.5 py-1.5 rounded-xl bg-surface hover:bg-surface-border border border-surface-border text-slate-200 font-semibold text-xs transition"
-                        >
-                          Importar do MikroTik
-                        </button>
-                        <button
-                          onClick={onOpenCreate}
-                          className="px-3.5 py-1.5 rounded-xl bg-primary hover:bg-primary-hover text-background font-semibold text-xs transition shadow-glow-primary"
-                        >
-                          Criar Novo Usuário
-                        </button>
+                        Tente ajustar os filtros de busca ou crie uma nova conta Hotspot.
                       </div>
                     </div>
                   )}
                 </td>
               </tr>
             ) : (
-              filteredUsers.map((user) => {
+              paginatedUsers.map((user) => {
                 const group = groups.find((g) => g.id === user.logicalGroupId);
                 const isRevealed = revealedPasswords[user.id];
+                const isSelected = selectedUserIds.has(user.id);
 
                 return (
-                  <tr key={user.id} className="hover:bg-surface/30 transition">
+                  <tr
+                    key={user.id}
+                    className={`hover:bg-surface/30 transition ${
+                      isSelected ? 'bg-primary/5' : ''
+                    }`}
+                  >
+                    <td className="py-3 px-3 text-center">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleUser(user.id)}
+                        className="text-slate-400 hover:text-white transition"
+                      >
+                        {isSelected ? (
+                          <CheckSquare className="w-4 h-4 text-primary" />
+                        ) : (
+                          <Square className="w-4 h-4" />
+                        )}
+                      </button>
+                    </td>
+
                     <td className="py-3 px-4">
-                      <div className="font-semibold text-white font-mono">{user.username}</div>
-                      {user.comment && <div className="text-xs text-slate-400">{user.comment}</div>}
+                      <div className="flex items-center space-x-2">
+                        <span className="font-semibold text-white font-mono">{user.username}</span>
+                        {user.disabled && (
+                          <span className="px-1.5 py-0.2 rounded bg-accent-amber/15 text-accent-amber text-[9px] font-bold border border-accent-amber/30">
+                            Pausado
+                          </span>
+                        )}
+                      </div>
+                      {user.comment && <div className="text-xs text-slate-400 truncate max-w-xs">{user.comment}</div>}
                     </td>
 
                     <td className="py-3 px-4">
@@ -263,7 +588,7 @@ export const UsersView: React.FC<Props> = ({
                     </td>
 
                     <td className="py-3 px-4 text-right">
-                      <div className="flex items-center justify-end space-x-2">
+                      <div className="flex items-center justify-end space-x-1.5">
                         <button
                           type="button"
                           title="Editar usuário e trocar senha/grupo"
@@ -299,6 +624,55 @@ export const UsersView: React.FC<Props> = ({
             )}
           </tbody>
         </table>
+
+        {/* Pagination Bar */}
+        {filteredUsers.length > 0 && (
+          <div className="p-3 bg-surface/40 border-t border-surface-border flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400">
+            <div>
+              Mostrando <strong>{paginatedUsers.length}</strong> de <strong>{filteredUsers.length}</strong> usuários
+              {filteredUsers.length !== users.length && ` (filtrado de ${users.length} total)`}
+            </div>
+
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2">
+                <span>Por página:</span>
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => {
+                    setItemsPerPage(parseInt(e.target.value, 10));
+                    setCurrentPage(1);
+                  }}
+                  className="px-2 py-1 bg-surface-card border border-surface-border rounded-lg text-white text-xs focus:outline-none"
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </div>
+
+              <div className="flex items-center space-x-1">
+                <button
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage <= 1}
+                  className="p-1.5 rounded-lg bg-surface-card border border-surface-border text-slate-300 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+                <span className="px-2 font-mono text-white">
+                  {currentPage} / {totalPages}
+                </span>
+                <button
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage >= totalPages}
+                  className="p-1.5 rounded-lg bg-surface-card border border-surface-border text-slate-300 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
