@@ -26,6 +26,11 @@ export class RosClient {
     reject: (err: Error) => void;
   } | null = null;
   private receivedSentences: RosSentence[] = [];
+  private commandQueue: Array<{
+    words: string[];
+    resolve: (sentences: RosSentence[]) => void;
+    reject: (err: Error) => void;
+  }> = [];
 
   constructor(private options: RosConnectOptions) {
     this.options.port = this.options.port || (this.options.useSsl ? 8729 : 8728);
@@ -73,18 +78,12 @@ export class RosClient {
 
       this.socket.on('data', (data) => this.onData(data));
       this.socket.on('error', (err) => {
-        if (this.currentPromise) {
-          this.currentPromise.reject(err);
-          this.currentPromise = null;
-        }
+        this.rejectAllPending(err);
         onError(err);
       });
       this.socket.on('close', () => {
         this.connected = false;
-        if (this.currentPromise) {
-          this.currentPromise.reject(new Error('Conexão encerrada pelo MikroTik.'));
-          this.currentPromise = null;
-        }
+        this.rejectAllPending(new Error('Conexão encerrada pelo MikroTik.'));
       });
     });
   }
@@ -129,29 +128,52 @@ export class RosClient {
     if (!this.socket || !this.connected) {
       throw new Error('Socket não está conectado ao MikroTik.');
     }
-    if (this.currentPromise) {
-      throw new Error('Comando concorrente em andamento neste socket.');
-    }
 
     return new Promise((resolve, reject) => {
-      this.currentPromise = { resolve, reject };
-      this.receivedSentences = [];
-
-      // Encode and send words
-      const buffers: Buffer[] = [];
-      for (const word of words) {
-        buffers.push(this.encodeWord(word));
+      this.commandQueue.push({ words, resolve, reject });
+      if (!this.currentPromise) {
+        this.processNextCommand();
       }
-      buffers.push(Buffer.from([0])); // End of sentence (zero byte)
-
-      const fullPayload = Buffer.concat(buffers);
-      this.socket!.write(fullPayload, (err) => {
-        if (err) {
-          this.currentPromise = null;
-          reject(err);
-        }
-      });
     });
+  }
+
+  private processNextCommand(): void {
+    if (this.currentPromise || this.commandQueue.length === 0) return;
+    if (!this.socket || !this.connected) {
+      this.rejectAllPending(new Error('Socket não está conectado ao MikroTik.'));
+      return;
+    }
+
+    const next = this.commandQueue.shift()!;
+    this.currentPromise = { resolve: next.resolve, reject: next.reject };
+    this.receivedSentences = [];
+
+    const buffers: Buffer[] = [];
+    for (const word of next.words) {
+      buffers.push(this.encodeWord(word));
+    }
+    buffers.push(Buffer.from([0])); // End of sentence (zero byte)
+
+    const fullPayload = Buffer.concat(buffers);
+    this.socket.write(fullPayload, (err) => {
+      if (err) {
+        const resolver = this.currentPromise;
+        this.currentPromise = null;
+        if (resolver) resolver.reject(err);
+        this.processNextCommand();
+      }
+    });
+  }
+
+  private rejectAllPending(err: Error): void {
+    if (this.currentPromise) {
+      this.currentPromise.reject(err);
+      this.currentPromise = null;
+    }
+    while (this.commandQueue.length > 0) {
+      const cmd = this.commandQueue.shift();
+      cmd?.reject(err);
+    }
   }
 
   private onData(chunk: Buffer) {
@@ -170,6 +192,7 @@ export class RosClient {
           const resolver = this.currentPromise.resolve;
           this.currentPromise = null;
           resolver(sentences);
+          this.processNextCommand();
         }
       }
     }
@@ -281,6 +304,7 @@ export class RosClient {
   }
 
   public close(): void {
+    this.rejectAllPending(new Error('Conexão encerrada pelo cliente.'));
     if (this.socket) {
       this.socket.destroy();
       this.socket = null;

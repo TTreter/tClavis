@@ -80,7 +80,7 @@ export const ParityAuditModal: React.FC<Props> = ({
             </div>
             <div>
               <h2 className="text-lg font-bold text-white">Auditoria de Paridade (Diff Checker)</h2>
-              <p className="text-xs text-slate-400">Varredura e comparação física com os 3 MikroTiks</p>
+              <p className="text-xs text-slate-400">Varredura e comparação física com os roteadores do cluster</p>
             </div>
           </div>
 

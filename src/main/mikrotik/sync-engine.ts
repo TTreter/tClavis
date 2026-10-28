@@ -264,96 +264,93 @@ export class SyncEngine {
     return discovered;
   }
 
-  public async syncUserToCluster(user: HotspotUser): Promise<void> {
-    const routers = this.db.getRouters();
+  public async syncUserToSingleRouter(
+    routerId: string,
+    user: HotspotUser,
+    explicitProfile?: string,
+    explicitServer?: string
+  ): Promise<void> {
+    const router = this.db.getRouters().find((r) => r.id === routerId);
+    if (!router) return;
+
     const groups = this.db.getGroups();
     const servers = this.db.getServers();
-
     const group = groups.find((g) => g.id === user.logicalGroupId);
     const server = servers.find((s) => s.id === user.logicalServerId);
 
-    for (const router of routers) {
-      // Resolve De-Para
-      const targetProfile = group?.routerMappings[router.id] || 'default';
-      const targetServer = server?.routerMappings[router.id] || 'all';
+    const targetProfile = explicitProfile || group?.routerMappings[router.id] || 'default';
+    const targetServer = explicitServer || server?.routerMappings[router.id] || 'all';
 
-      const client = new RosClient({
-        host: router.host,
-        port: router.port,
-        useSsl: router.useSsl,
-        username: router.username,
-        password: this.getPlainPassword(router),
-        timeoutMs: 4000,
+    try {
+      const client = await this.getPooledClient(router);
+
+      // Check if user already exists
+      const findRes = await client.talk([
+        '/ip/hotspot/user/print',
+        `?name=${user.username}`,
+      ]);
+
+      const existing = findRes.find((s) => s.type === '!re');
+      const cmdWords: string[] = [];
+
+      if (existing && existing.attributes['.id']) {
+        cmdWords.push('/ip/hotspot/user/set');
+        cmdWords.push(`=.id=${existing.attributes['.id']}`);
+        if (user.password) cmdWords.push(`=password=${user.password}`);
+        cmdWords.push(`=profile=${targetProfile}`);
+        if (targetServer && targetServer !== 'all') cmdWords.push(`=server=${targetServer}`);
+        if (user.comment) cmdWords.push(`=comment=${user.comment}`);
+        if (user.uptimeLimit) cmdWords.push(`=limit-uptime=${user.uptimeLimit}`);
+        if (user.bytesLimit) cmdWords.push(`=limit-bytes-total=${user.bytesLimit}`);
+        cmdWords.push(`=disabled=${user.disabled ? 'yes' : 'no'}`);
+      } else {
+        cmdWords.push('/ip/hotspot/user/add');
+        cmdWords.push(`=name=${user.username}`);
+        if (user.password) cmdWords.push(`=password=${user.password}`);
+        cmdWords.push(`=profile=${targetProfile}`);
+        if (targetServer && targetServer !== 'all') cmdWords.push(`=server=${targetServer}`);
+        if (user.comment) cmdWords.push(`=comment=${user.comment}`);
+        if (user.uptimeLimit) cmdWords.push(`=limit-uptime=${user.uptimeLimit}`);
+        if (user.bytesLimit) cmdWords.push(`=limit-bytes-total=${user.bytesLimit}`);
+        cmdWords.push(`=disabled=${user.disabled ? 'yes' : 'no'}`);
+      }
+
+      const reply = await client.talk(cmdWords);
+      const trap = reply.find((s) => s.type === '!trap');
+      if (trap) {
+        throw new Error(trap.attributes.message || 'Erro ao gravar usuário no MikroTik');
+      }
+
+      this.db.setUserSyncStatus(user.id, router.id, {
+        status: 'synced',
+        lastSynced: new Date().toISOString(),
+        remoteProfile: targetProfile,
+        remoteServer: targetServer,
+      });
+    } catch (err: any) {
+      this.evictFromPool(router.id);
+      this.db.setUserSyncStatus(user.id, router.id, {
+        status: 'pending',
+        errorMsg: err.message,
+        remoteProfile: targetProfile,
+        remoteServer: targetServer,
       });
 
-      try {
-        await client.connect();
+      this.db.pushSyncQueue({
+        routerId: router.id,
+        action: 'create_user',
+        payload: { user, targetProfile, targetServer },
+        status: 'pending',
+        retryCount: 0,
+        lastError: err.message,
+      });
+    }
+  }
 
-        // Check if user already exists
-        const findRes = await client.talk([
-          '/ip/hotspot/user/print',
-          `?name=${user.username}`,
-        ]);
-
-        const existing = findRes.find((s) => s.type === '!re');
-
-        const cmdWords: string[] = [];
-        if (existing && existing.attributes['.id']) {
-          // Update user
-          cmdWords.push('/ip/hotspot/user/set');
-          cmdWords.push(`=.id=${existing.attributes['.id']}`);
-          if (user.password) cmdWords.push(`=password=${user.password}`);
-          cmdWords.push(`=profile=${targetProfile}`);
-          if (targetServer && targetServer !== 'all') cmdWords.push(`=server=${targetServer}`);
-          if (user.comment) cmdWords.push(`=comment=${user.comment}`);
-          if (user.uptimeLimit) cmdWords.push(`=limit-uptime=${user.uptimeLimit}`);
-          if (user.bytesLimit) cmdWords.push(`=limit-bytes-total=${user.bytesLimit}`);
-          cmdWords.push(`=disabled=${user.disabled ? 'yes' : 'no'}`);
-        } else {
-          // Add user
-          cmdWords.push('/ip/hotspot/user/add');
-          cmdWords.push(`=name=${user.username}`);
-          if (user.password) cmdWords.push(`=password=${user.password}`);
-          cmdWords.push(`=profile=${targetProfile}`);
-          if (targetServer && targetServer !== 'all') cmdWords.push(`=server=${targetServer}`);
-          if (user.comment) cmdWords.push(`=comment=${user.comment}`);
-          if (user.uptimeLimit) cmdWords.push(`=limit-uptime=${user.uptimeLimit}`);
-          if (user.bytesLimit) cmdWords.push(`=limit-bytes-total=${user.bytesLimit}`);
-          cmdWords.push(`=disabled=${user.disabled ? 'yes' : 'no'}`);
-        }
-
-        const reply = await client.talk(cmdWords);
-        client.close();
-
-        const trap = reply.find((s) => s.type === '!trap');
-        if (trap) {
-          throw new Error(trap.attributes.message || 'Erro ao gravar usuário no MikroTik');
-        }
-
-        this.db.setUserSyncStatus(user.id, router.id, {
-          status: 'synced',
-          lastSynced: new Date().toISOString(),
-          remoteProfile: targetProfile,
-          remoteServer: targetServer,
-        });
-      } catch (err: any) {
-        client.close();
-        this.db.setUserSyncStatus(user.id, router.id, {
-          status: 'pending',
-          errorMsg: err.message,
-          remoteProfile: targetProfile,
-          remoteServer: targetServer,
-        });
-
-        this.db.pushSyncQueue({
-          routerId: router.id,
-          action: 'create_user',
-          payload: { user, targetProfile, targetServer },
-          status: 'pending',
-          retryCount: 0,
-          lastError: err.message,
-        });
-      }
+  public async syncUserToCluster(user: HotspotUser): Promise<void> {
+    const routers = this.db.getRouters();
+    for (const router of routers) {
+      await this.syncUserToSingleRouter(router.id, user);
     }
   }
 
@@ -430,59 +427,53 @@ export class SyncEngine {
     }
   }
 
+  public async deleteUserFromSingleRouter(routerId: string, username: string): Promise<void> {
+    const router = this.db.getRouters().find((r) => r.id === routerId);
+    if (!router) return;
+
+    try {
+      const client = await this.getPooledClient(router);
+
+      // 1. Find user in MikroTik
+      const findRes = await client.talk([
+        '/ip/hotspot/user/print',
+        `?name=${username}`,
+      ]);
+
+      const existing = findRes.find((s) => s.type === '!re');
+      if (existing && existing.attributes['.id']) {
+        await client.talk([
+          '/ip/hotspot/user/remove',
+          `=.id=${existing.attributes['.id']}`,
+        ]);
+      }
+
+      // 2. Also kick active sessions if online
+      const activeRes = await client.talk([
+        '/ip/hotspot/active/print',
+        `?user=${username}`,
+      ]);
+      for (const act of activeRes.filter((s) => s.type === '!re' && s.attributes['.id'])) {
+        await client.talk(['/ip/hotspot/active/remove', `=.id=${act.attributes['.id']}`]);
+      }
+    } catch (err: any) {
+      this.evictFromPool(router.id);
+      this.db.pushSyncQueue({
+        routerId: router.id,
+        action: 'delete_user',
+        payload: { username },
+        status: 'pending',
+        retryCount: 0,
+        lastError: err.message,
+      });
+    }
+  }
+
   public async deleteUserFromCluster(user: HotspotUser): Promise<void> {
     const routers = this.db.getRouters();
-
     for (const router of routers) {
-      const client = new RosClient({
-        host: router.host,
-        port: router.port,
-        useSsl: router.useSsl,
-        username: router.username,
-        password: this.getPlainPassword(router),
-        timeoutMs: 4000,
-      });
-
-      try {
-        await client.connect();
-
-        // 1. Find user in MikroTik
-        const findRes = await client.talk([
-          '/ip/hotspot/user/print',
-          `?name=${user.username}`,
-        ]);
-
-        const existing = findRes.find((s) => s.type === '!re');
-        if (existing && existing.attributes['.id']) {
-          await client.talk([
-            '/ip/hotspot/user/remove',
-            `=.id=${existing.attributes['.id']}`,
-          ]);
-        }
-
-        // 2. Also kick active sessions if online
-        const activeRes = await client.talk([
-          '/ip/hotspot/active/print',
-          `?user=${user.username}`,
-        ]);
-        for (const act of activeRes.filter((s) => s.type === '!re' && s.attributes['.id'])) {
-          await client.talk(['/ip/hotspot/active/remove', `=.id=${act.attributes['.id']}`]);
-        }
-
-        client.close();
-      } catch (err: any) {
-        client.close();
-        this.db.pushSyncQueue({
-          routerId: router.id,
-          action: 'delete_user',
-          payload: { username: user.username },
-          status: 'pending',
-          retryCount: 0,
-          lastError: err.message,
-        });
-      }
+      await this.deleteUserFromSingleRouter(router.id, user.username);
     }
-
     this.db.deleteUser(user.id);
   }
 

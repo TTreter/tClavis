@@ -12,7 +12,7 @@ import {
   ShieldCheck,
   Tv,
 } from 'lucide-react';
-import { RouterDevice, HotspotUser, LogicalGroup, LogicalServer, ParityDiscrepancy, IpBinding } from '../../shared/types';
+import { RouterDevice, HotspotUser, LogicalGroup, LogicalServer, ParityDiscrepancy, IpBinding, ImportUsersBatchOptions } from '../../shared/types';
 import { DashboardView } from './views/DashboardView';
 import { UsersView } from './views/UsersView';
 import { RoutersView } from './views/RoutersView';
@@ -30,7 +30,6 @@ import { ParityAuditModal } from './components/ParityAuditModal';
 import { BackupModal } from './components/BackupModal';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { Logo } from './components/Logo';
-import { ImportUsersBatchOptions } from '../../../shared/types';
 
 declare global {
   interface Window {

@@ -783,6 +783,24 @@ export class AppDatabase {
 
   public pushSyncQueue(item: Omit<SyncQueueItem, 'id' | 'createdAt'>): void {
     if (!this.db) return;
+
+    // Deduplication check: if a pending item for this router and user already exists, update error & retries
+    const queue = this.getSyncQueue();
+    const itemUsername = item.payload?.user?.username || item.payload?.username;
+    const existing = queue.find((q) => {
+      const qUsername = q.payload?.user?.username || q.payload?.username;
+      return q.routerId === item.routerId && q.action === item.action && qUsername && qUsername === itemUsername;
+    });
+
+    if (existing) {
+      this.db.run(
+        "UPDATE sync_queue SET payload = ?, last_error = ?, retry_count = retry_count + 1 WHERE id = ?",
+        [JSON.stringify(item.payload), item.lastError || '', existing.id]
+      );
+      this.save();
+      return;
+    }
+
     const id = `sq_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     this.db.run(
       `INSERT INTO sync_queue (id, router_id, action, payload, status, retry_count, last_error, created_at)
@@ -799,6 +817,16 @@ export class AppDatabase {
       ]
     );
     this.save();
+  }
+
+  public enqueueSync(routerId: string, action: SyncQueueItem['action'], payload: any): void {
+    this.pushSyncQueue({
+      routerId,
+      action,
+      payload,
+      status: 'pending',
+      retryCount: 0,
+    });
   }
 
   public markSyncQueueCompleted(id: string): void {

@@ -77,12 +77,18 @@ export class SyncWorker {
         this.resetRouterBackoff(item.routerId);
 
         if (item.action === 'create_user' && item.payload?.user) {
-          await this.syncEngine.syncUserToCluster(item.payload.user);
+          await this.syncEngine.syncUserToSingleRouter(
+            item.routerId,
+            item.payload.user,
+            item.payload.targetProfile,
+            item.payload.targetServer
+          );
           this.db.markSyncQueueCompleted(item.id);
           console.log(`✅ [tClavis Worker] Reprocessed pending user sync for ${item.payload.user.username} on ${router.name}`);
         } else if (item.action === 'delete_user' && item.payload?.username) {
-          await this.syncEngine.deleteUserFromCluster({ username: item.payload.username } as any);
+          await this.syncEngine.deleteUserFromSingleRouter(item.routerId, item.payload.username);
           this.db.markSyncQueueCompleted(item.id);
+          console.log(`✅ [tClavis Worker] Reprocessed pending user deletion for ${item.payload.username} on ${router.name}`);
         }
       }
 
