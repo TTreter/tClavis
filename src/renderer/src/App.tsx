@@ -454,7 +454,7 @@ export default function App() {
           </button>
 
           <div className="text-[10px] text-slate-500 font-mono text-center pt-1">
-            tClavis v1.1.0 Desktop • RouterOS
+            tClavis v1.2.0 Desktop • RouterOS
           </div>
         </div>
       </aside>
