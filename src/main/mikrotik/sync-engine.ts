@@ -8,6 +8,8 @@ import {
   AuditReport,
   ParityDiscrepancy,
   IpBinding,
+  DiscoveredRouterUser,
+  CreateProfileResult,
 } from '../../shared/types';
 
 export class SyncEngine {
@@ -145,14 +147,121 @@ export class SyncEngine {
         .map((s) => s.attributes.name);
 
       client.close();
+
+      const validProfiles = profiles.length ? profiles : ['default'];
+      const validServers = servers.length ? ['all', ...servers] : ['all'];
+
+      // Persist discovered profiles and servers in SQLite cache
+      this.db.updateRouterCache(router.id, validProfiles, validServers);
+
       return {
-        profiles: profiles.length ? profiles : ['default'],
-        servers: servers.length ? ['all', ...servers] : ['all'],
+        profiles: validProfiles,
+        servers: validServers,
       };
     } catch (err: any) {
       client.close();
+
+      // Fallback to SQLite cached profiles if router is offline
+      const cached = this.db.getRouters().find((r) => r.id === router.id);
+      if (cached?.cachedProfiles?.length) {
+        return {
+          profiles: cached.cachedProfiles,
+          servers: cached.cachedServers?.length ? cached.cachedServers : ['all'],
+        };
+      }
+
       throw new Error(`Falha ao inspecionar roteador ${router.name}: ${err.message}`);
     }
+  }
+
+  /**
+   * Creates a new User Profile directly on the specified MikroTik router.
+   */
+  public async createRouterProfile(
+    routerId: string,
+    name: string,
+    rateLimit?: string,
+    sharedUsers: number = 1
+  ): Promise<CreateProfileResult> {
+    const router = this.db.getRouters().find((r) => r.id === routerId);
+    if (!router) {
+      return { success: false, error: 'Roteador não encontrado.' };
+    }
+
+    try {
+      const client = await this.getPooledClient(router);
+      const words = ['/ip/hotspot/user/profile/add', `=name=${name.trim()}`, `=shared-users=${sharedUsers}`];
+      if (rateLimit?.trim()) {
+        words.push(`=rate-limit=${rateLimit.trim()}`);
+      }
+
+      const res = await client.talk(words);
+      const trap = res.find((s) => s.type === '!trap');
+      if (trap) {
+        return {
+          success: false,
+          error: trap.attributes.message || 'Erro ao criar perfil no MikroTik.',
+        };
+      }
+
+      // Update cached profiles
+      const currentCache = router.cachedProfiles || ['default'];
+      if (!currentCache.includes(name.trim())) {
+        currentCache.push(name.trim());
+        this.db.updateRouterCache(router.id, currentCache, router.cachedServers || ['all']);
+      }
+
+      return { success: true, profileName: name.trim() };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  }
+
+  /**
+   * Reads all existing users from a physical MikroTik via RouterOS API (/ip/hotspot/user/print).
+   */
+  public async importUsersFromRouter(routerId: string): Promise<DiscoveredRouterUser[]> {
+    const router = this.db.getRouters().find((r) => r.id === routerId);
+    if (!router) {
+      throw new Error('Roteador não encontrado.');
+    }
+
+    const client = await this.getPooledClient(router);
+    const res = await client.talk(['/ip/hotspot/user/print']);
+
+    const existingUsers = this.db.getUsers();
+    const existingNames = new Set(existingUsers.map((u) => u.username.toLowerCase()));
+
+    const discovered: DiscoveredRouterUser[] = [];
+
+    for (const item of res.filter((s) => s.type === '!re')) {
+      const name = item.attributes.name;
+      if (!name) continue;
+
+      const profile = item.attributes.profile || 'default';
+      const server = item.attributes.server || 'all';
+      const password = item.attributes.password || '';
+      const uptimeLimit = item.attributes['limit-uptime'];
+      const bytesLimit = item.attributes['limit-bytes-total']
+        ? parseInt(item.attributes['limit-bytes-total'], 10)
+        : undefined;
+      const comment = item.attributes.comment;
+      const disabled = item.attributes.disabled === 'yes' || item.attributes.disabled === 'true';
+
+      discovered.push({
+        name,
+        password,
+        profile,
+        server,
+        uptimeLimit,
+        bytesLimit,
+        comment,
+        disabled,
+        alreadyExists: existingNames.has(name.toLowerCase()),
+      });
+    }
+
+    return discovered;
   }
 
   public async syncUserToCluster(user: HotspotUser): Promise<void> {
@@ -565,12 +674,32 @@ export class SyncEngine {
   public async repairDiscrepancies(discrepancies: ParityDiscrepancy[]): Promise<number> {
     let repairedCount = 0;
     const localUsers = this.db.getUsers();
+    const routers = this.db.getRouters();
 
     for (const disc of discrepancies) {
-      const user = localUsers.find((u) => u.username === disc.username);
-      if (user) {
-        await this.syncUserToCluster(user);
-        repairedCount++;
+      if (disc.type === 'orphan_in_router') {
+        const r = routers.find((item) => item.id === disc.routerId);
+        if (r) {
+          try {
+            const discovered = await this.importUsersFromRouter(r.id);
+            const orphan = discovered.find((u) => u.name === disc.username);
+            if (orphan) {
+              this.db.importUsersBatch({
+                sourceRouterId: r.id,
+                users: [orphan],
+                autoCreateGroups: true,
+                syncToOtherRouters: false,
+              });
+              repairedCount++;
+            }
+          } catch (_) {}
+        }
+      } else {
+        const user = localUsers.find((u) => u.username === disc.username);
+        if (user) {
+          await this.syncUserToCluster(user);
+          repairedCount++;
+        }
       }
     }
 

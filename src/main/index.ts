@@ -5,7 +5,7 @@ import { SyncEngine } from './mikrotik/sync-engine';
 import { SyncWorker } from './services/sync-worker';
 import { TrayManager } from './services/tray-manager';
 import { SecurityValidator } from './security/validator';
-import { RouterDevice, LogicalGroup, LogicalServer, HotspotUser, ParityDiscrepancy, IpBinding } from '../shared/types';
+import { RouterDevice, LogicalGroup, LogicalServer, HotspotUser, ParityDiscrepancy, IpBinding, ImportUsersBatchOptions } from '../shared/types';
 
 let mainWindow: BrowserWindow | null = null;
 let db: AppDatabase;
@@ -64,6 +64,9 @@ function registerIpcHandlers() {
   ipcMain.handle('routers:delete', async (_, id: string) => db.deleteRouter(id));
   ipcMain.handle('routers:test', async (_, router: RouterDevice) => syncEngine.testRouter(router));
   ipcMain.handle('routers:inspect', async (_, router: RouterDevice) => syncEngine.inspectRouterEntities(router));
+  ipcMain.handle('routers:create_profile', async (_, routerId: string, name: string, rateLimit?: string) =>
+    syncEngine.createRouterProfile(routerId, name, rateLimit)
+  );
 
   // Groups
   ipcMain.handle('groups:get', async () => db.getGroups());
@@ -107,6 +110,12 @@ function registerIpcHandlers() {
 
   ipcMain.handle('users:sync', async (_, user: HotspotUser) => syncEngine.syncUserToCluster(user));
   ipcMain.handle('users:delete', async (_, user: HotspotUser) => syncEngine.deleteUserFromCluster(user));
+  ipcMain.handle('users:discover_from_router', async (_, routerId: string) =>
+    syncEngine.importUsersFromRouter(routerId)
+  );
+  ipcMain.handle('users:import_batch', async (_, options: ImportUsersBatchOptions) =>
+    db.importUsersBatch(options)
+  );
 
   // Parity Audit
   ipcMain.handle('audit:run', async () => syncEngine.runParityAudit());

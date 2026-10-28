@@ -1,7 +1,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import initSqlJs, { Database as SqlJsDatabase } from 'sql.js';
-import { RouterDevice, LogicalGroup, LogicalServer, HotspotUser, SyncQueueItem } from '../../shared/types';
+import { RouterDevice, LogicalGroup, LogicalServer, HotspotUser, SyncQueueItem, DiscoveredRouterUser, ImportUsersBatchOptions } from '../../shared/types';
 import { CredentialVault } from '../security/crypto';
 
 export class AppDatabase {
@@ -77,7 +77,9 @@ export class AppDatabase {
         cpu_load INTEGER DEFAULT 0,
         uptime TEXT,
         last_seen TEXT,
-        last_error TEXT
+        last_error TEXT,
+        cached_profiles TEXT,
+        cached_servers TEXT
       );
 
       CREATE TABLE IF NOT EXISTS logical_groups (
@@ -153,6 +155,14 @@ export class AppDatabase {
       CREATE INDEX IF NOT EXISTS idx_router_group_map ON router_group_mappings(logical_group_id, router_id);
       CREATE INDEX IF NOT EXISTS idx_router_server_map ON router_server_mappings(logical_server_id, router_id);
     `);
+
+    // Safe schema migrations for existing databases
+    try {
+      this.db.run("ALTER TABLE routers ADD COLUMN cached_profiles TEXT;");
+    } catch (_) {}
+    try {
+      this.db.run("ALTER TABLE routers ADD COLUMN cached_servers TEXT;");
+    } catch (_) {}
   }
 
   private seedDefaultsIfEmpty(): void {
@@ -264,38 +274,61 @@ export class AppDatabase {
   // --- Routers CRUD ---
   public getRouters(): RouterDevice[] {
     if (!this.db) return [];
-    const res = this.db.exec("SELECT * FROM routers ORDER BY name ASC;");
+    const res = this.db.exec("SELECT id, name, host, port, use_ssl, username, password_encrypted, status, latency_ms, routeros_version, cpu_load, uptime, last_seen, last_error, cached_profiles, cached_servers FROM routers ORDER BY name ASC;");
     if (res.length === 0) return [];
 
     const rows = res[0].values;
-    return rows.map((r) => ({
-      id: r[0] as string,
-      name: r[1] as string,
-      host: r[2] as string,
-      port: r[3] as number,
-      useSsl: (r[4] as number) === 1,
-      username: r[5] as string,
-      passwordEncrypted: r[6] as string,
-      status: r[7] as any,
-      latencyMs: r[8] as number,
-      routerOsVersion: r[9] as string,
-      cpuLoad: r[10] as number,
-      uptime: r[11] as string,
-      lastSeen: r[12] as string,
-      lastError: r[13] as string,
-    }));
+    return rows.map((r) => {
+      let cachedProfiles: string[] | undefined;
+      let cachedServers: string[] | undefined;
+      try {
+        if (r[14]) cachedProfiles = JSON.parse(r[14] as string);
+      } catch (_) {}
+      try {
+        if (r[15]) cachedServers = JSON.parse(r[15] as string);
+      } catch (_) {}
+
+      return {
+        id: r[0] as string,
+        name: r[1] as string,
+        host: r[2] as string,
+        port: r[3] as number,
+        useSsl: (r[4] as number) === 1,
+        username: r[5] as string,
+        passwordEncrypted: r[6] as string,
+        status: r[7] as any,
+        latencyMs: r[8] as number,
+        routerOsVersion: r[9] as string,
+        cpuLoad: r[10] as number,
+        uptime: r[11] as string,
+        lastSeen: r[12] as string,
+        lastError: r[13] as string,
+        cachedProfiles,
+        cachedServers,
+      };
+    });
   }
 
   public addRouter(router: RouterDevice): void {
     if (!this.db) return;
+
+    // Validate duplicate host:port
+    const trimmedHost = router.host.trim().toLowerCase();
+    const existing = this.getRouters().find(
+      (r) => r.id !== router.id && r.host.trim().toLowerCase() === trimmedHost && r.port === router.port
+    );
+    if (existing) {
+      throw new Error(`Já existe um roteador cadastrado com o endereço ${router.host}:${router.port} ("${existing.name}").`);
+    }
+
     const encryptedPass = router.passwordEncrypted.includes(':') 
       ? router.passwordEncrypted 
       : CredentialVault.encrypt(router.passwordEncrypted);
 
     this.db.run(
       `INSERT OR REPLACE INTO routers 
-       (id, name, host, port, use_ssl, username, password_encrypted, status, latency_ms, routeros_version, cpu_load, uptime, last_seen, last_error) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, name, host, port, use_ssl, username, password_encrypted, status, latency_ms, routeros_version, cpu_load, uptime, last_seen, last_error, cached_profiles, cached_servers) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         router.id,
         router.name,
@@ -311,7 +344,18 @@ export class AppDatabase {
         router.uptime || '',
         router.lastSeen || '',
         router.lastError || '',
+        router.cachedProfiles ? JSON.stringify(router.cachedProfiles) : null,
+        router.cachedServers ? JSON.stringify(router.cachedServers) : null,
       ]
+    );
+    this.save();
+  }
+
+  public updateRouterCache(id: string, profiles: string[], servers: string[]): void {
+    if (!this.db) return;
+    this.db.run(
+      "UPDATE routers SET cached_profiles = ?, cached_servers = ? WHERE id = ?",
+      [JSON.stringify(profiles), JSON.stringify(servers), id]
     );
     this.save();
   }
@@ -575,6 +619,122 @@ export class AppDatabase {
     }
 
     this.save();
+  }
+
+  /**
+   * Imports a batch of discovered physical users from a MikroTik into tClavis database.
+   * Automatically reconciles groups and enqueues sync tasks if syncToOtherRouters is true.
+   */
+  public importUsersBatch(options: ImportUsersBatchOptions): { importedCount: number; groupsCreated: number } {
+    if (!this.db || options.users.length === 0) return { importedCount: 0, groupsCreated: 0 };
+    const routers = this.getRouters();
+    const existingUsers = this.getUsers();
+    const existingUsernames = new Set(existingUsers.map((u) => u.username.toLowerCase()));
+    let groups = this.getGroups();
+    let groupsCreated = 0;
+
+    const sourceRouter = routers.find((r) => r.id === options.sourceRouterId);
+    const sourceRouterName = sourceRouter ? sourceRouter.name : 'MikroTik';
+
+    const usersToInsert: HotspotUser[] = [];
+    const now = new Date().toISOString();
+
+    for (let i = 0; i < options.users.length; i++) {
+      const u = options.users[i];
+      if (existingUsernames.has(u.name.toLowerCase())) {
+        // Skip duplicate
+        continue;
+      }
+
+      // 1. Reconcile or create logical group
+      const targetProfile = u.profile || 'default';
+      let matchedGroup = groups.find((g) => g.routerMappings[options.sourceRouterId] === targetProfile);
+
+      if (!matchedGroup) {
+        // Try to find a group with same name
+        matchedGroup = groups.find((g) => g.name.toLowerCase() === targetProfile.toLowerCase());
+      }
+
+      if (!matchedGroup && options.autoCreateGroups) {
+        // Create new logical group for this profile
+        const newGroupId = `grp_auto_${targetProfile.toLowerCase().replace(/[^a-z0-9]/g, '_')}_${Date.now()}_${i}`;
+        const newGroupMappings: Record<string, string> = {};
+        for (const r of routers) {
+          newGroupMappings[r.id] = r.id === options.sourceRouterId ? targetProfile : targetProfile;
+        }
+
+        matchedGroup = {
+          id: newGroupId,
+          name: `Grupo ${targetProfile}`,
+          description: `Perfil importado de ${sourceRouterName}`,
+          routerMappings: newGroupMappings,
+        };
+        this.addGroup(matchedGroup);
+        groups = this.getGroups();
+        groupsCreated++;
+      }
+
+      const assignedGroupId = matchedGroup ? matchedGroup.id : (groups[0]?.id || 'grp-visitantes');
+
+      // 2. Build sync status matrix
+      const syncStatus: HotspotUser['syncStatus'] = {};
+      for (const r of routers) {
+        if (r.id === options.sourceRouterId) {
+          syncStatus[r.id] = {
+            status: 'synced',
+            remoteProfile: targetProfile,
+            remoteServer: u.server || 'all',
+            lastSynced: now,
+          };
+        } else if (options.syncToOtherRouters) {
+          syncStatus[r.id] = {
+            status: 'pending',
+            remoteProfile: matchedGroup?.routerMappings[r.id] || targetProfile,
+            remoteServer: u.server || 'all',
+          };
+        } else {
+          syncStatus[r.id] = {
+            status: 'ignored',
+            remoteProfile: targetProfile,
+            remoteServer: u.server || 'all',
+          };
+        }
+      }
+
+      const newUser: HotspotUser = {
+        id: `usr_imp_${Date.now()}_${i}`,
+        username: u.name,
+        password: u.password || '',
+        logicalGroupId: assignedGroupId,
+        comment: u.comment ? `${u.comment} (importado)` : `Importado de ${sourceRouterName}`,
+        uptimeLimit: u.uptimeLimit || undefined,
+        bytesLimit: u.bytesLimit || undefined,
+        disabled: u.disabled,
+        createdAt: now,
+        updatedAt: now,
+        syncStatus,
+      };
+
+      usersToInsert.push(newUser);
+      existingUsernames.add(u.name.toLowerCase());
+    }
+
+    if (usersToInsert.length > 0) {
+      this.addUsersBatch(usersToInsert);
+
+      // Enqueue sync tasks for other routers if requested
+      if (options.syncToOtherRouters) {
+        for (const user of usersToInsert) {
+          for (const r of routers) {
+            if (r.id !== options.sourceRouterId) {
+              this.enqueueSync(r.id, 'create_user', user);
+            }
+          }
+        }
+      }
+    }
+
+    return { importedCount: usersToInsert.length, groupsCreated };
   }
 
   public setUserSyncStatus(userId: string, routerId: string, status: any): void {

@@ -13,6 +13,8 @@ export interface RouterDevice {
   uptime?: string;
   lastSeen?: string;
   lastError?: string;
+  cachedProfiles?: string[];
+  cachedServers?: string[];
 }
 
 export interface LogicalServer {
@@ -115,3 +117,29 @@ export interface IpBinding {
   comment?: string;
   disabled: boolean;
 }
+
+export interface DiscoveredRouterUser {
+  name: string;
+  password?: string;
+  profile: string;
+  server?: string;
+  uptimeLimit?: string;
+  bytesLimit?: number;
+  comment?: string;
+  disabled: boolean;
+  alreadyExists: boolean;
+}
+
+export interface ImportUsersBatchOptions {
+  sourceRouterId: string;
+  users: DiscoveredRouterUser[];
+  autoCreateGroups: boolean;
+  syncToOtherRouters: boolean;
+}
+
+export interface CreateProfileResult {
+  success: boolean;
+  error?: string;
+  profileName?: string;
+}
+
