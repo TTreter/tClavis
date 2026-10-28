@@ -11,10 +11,57 @@ import {
 } from '../../shared/types';
 
 export class SyncEngine {
-  constructor(private db: AppDatabase) {}
+  private connectionPool: Map<string, { client: RosClient; expiresAt: number }> = new Map();
+
+  constructor(private db: AppDatabase) {
+    // Periodic pool cleanup timer for idle connections
+    setInterval(() => {
+      const now = Date.now();
+      for (const [id, entry] of this.connectionPool.entries()) {
+        if (entry.expiresAt <= now) {
+          entry.client.close();
+          this.connectionPool.delete(id);
+        }
+      }
+    }, 15000);
+  }
 
   private getPlainPassword(router: RouterDevice): string {
     return CredentialVault.decrypt(router.passwordEncrypted);
+  }
+
+  private async getPooledClient(router: RouterDevice): Promise<RosClient> {
+    const existing = this.connectionPool.get(router.id);
+    if (existing && existing.expiresAt > Date.now()) {
+      existing.expiresAt = Date.now() + 60000;
+      return existing.client;
+    }
+
+    if (existing) {
+      existing.client.close();
+      this.connectionPool.delete(router.id);
+    }
+
+    const client = new RosClient({
+      host: router.host,
+      port: router.port,
+      useSsl: router.useSsl,
+      username: router.username,
+      password: this.getPlainPassword(router),
+      timeoutMs: 5000,
+    });
+
+    await client.connect();
+    this.connectionPool.set(router.id, { client, expiresAt: Date.now() + 60000 });
+    return client;
+  }
+
+  public evictFromPool(routerId: string): void {
+    const existing = this.connectionPool.get(routerId);
+    if (existing) {
+      existing.client.close();
+      this.connectionPool.delete(routerId);
+    }
   }
 
   public async testRouter(router: RouterDevice): Promise<{
@@ -197,6 +244,79 @@ export class SyncEngine {
           retryCount: 0,
           lastError: err.message,
         });
+      }
+    }
+  }
+
+  /**
+   * High-speed batch sync leveraging the connection pool.
+   * Reuses the authenticated socket per router to add all users in a single stream.
+   */
+  public async syncUsersBatchToCluster(users: HotspotUser[]): Promise<void> {
+    const routers = this.db.getRouters();
+    const groups = this.db.getGroups();
+    const servers = this.db.getServers();
+
+    for (const router of routers) {
+      let client: RosClient | null = null;
+      try {
+        client = await this.getPooledClient(router);
+
+        for (const user of users) {
+          const group = groups.find((g) => g.id === user.logicalGroupId);
+          const server = servers.find((s) => s.id === user.logicalServerId);
+          const targetProfile = group?.routerMappings[router.id] || 'default';
+          const targetServer = server?.routerMappings[router.id] || 'all';
+
+          const cmd = [
+            '/ip/hotspot/user/add',
+            `=name=${user.username}`,
+            `=password=${user.password || ''}`,
+            `=profile=${targetProfile}`,
+          ];
+          if (targetServer && targetServer !== 'all') cmd.push(`=server=${targetServer}`);
+          if (user.comment) cmd.push(`=comment=${user.comment}`);
+          if (user.uptimeLimit) cmd.push(`=limit-uptime=${user.uptimeLimit}`);
+          if (user.bytesLimit) cmd.push(`=limit-bytes-total=${user.bytesLimit}`);
+
+          try {
+            await client.talk(cmd);
+            this.db.setUserSyncStatus(user.id, router.id, {
+              status: 'synced',
+              lastSynced: new Date().toISOString(),
+              remoteProfile: targetProfile,
+              remoteServer: targetServer,
+            });
+          } catch (itemErr: any) {
+            this.db.pushSyncQueue({
+              routerId: router.id,
+              action: 'create_user',
+              payload: { user, targetProfile, targetServer },
+              status: 'pending',
+              retryCount: 0,
+              lastError: itemErr.message,
+            });
+          }
+        }
+      } catch (connErr: any) {
+        this.evictFromPool(router.id);
+        // Router offline: queue all users for this router
+        for (const user of users) {
+          const group = groups.find((g) => g.id === user.logicalGroupId);
+          const server = servers.find((s) => s.id === user.logicalServerId);
+          this.db.pushSyncQueue({
+            routerId: router.id,
+            action: 'create_user',
+            payload: {
+              user,
+              targetProfile: group?.routerMappings[router.id] || 'default',
+              targetServer: server?.routerMappings[router.id] || 'all',
+            },
+            status: 'pending',
+            retryCount: 0,
+            lastError: connErr.message,
+          });
+        }
       }
     }
   }

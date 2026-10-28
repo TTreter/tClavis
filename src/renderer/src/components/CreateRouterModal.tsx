@@ -133,22 +133,29 @@ export const CreateRouterModal: React.FC<Props> = ({
             </div>
           </div>
 
-          <div className="flex items-center space-x-2 py-1">
-            <input
-              type="checkbox"
-              id="useSsl"
-              checked={useSsl}
-              onChange={(e) => {
-                setUseSsl(e.target.checked);
-                if (e.target.checked && port === '8728') setPort('8729');
-                if (!e.target.checked && port === '8729') setPort('8728');
-              }}
-              className="rounded bg-surface-card border-surface-border text-primary focus:ring-0"
-            />
-            <label htmlFor="useSsl" className="text-xs text-slate-300 cursor-pointer flex items-center space-x-1">
-              <ShieldCheck className="w-3.5 h-3.5 text-accent-purple" />
-              <span>Conectar com SSL/TLS (Criptografado)</span>
-            </label>
+          <div className="space-y-1 py-1">
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="useSsl"
+                checked={useSsl}
+                onChange={(e) => {
+                  setUseSsl(e.target.checked);
+                  if (e.target.checked && port === '8728') setPort('8729');
+                  if (!e.target.checked && port === '8729') setPort('8728');
+                }}
+                className="rounded bg-surface-card border-surface-border text-primary focus:ring-0"
+              />
+              <label htmlFor="useSsl" className="text-xs text-slate-300 cursor-pointer flex items-center space-x-1">
+                <ShieldCheck className="w-3.5 h-3.5 text-accent-purple" />
+                <span>Conectar com SSL/TLS (Criptografado)</span>
+              </label>
+            </div>
+            {useSsl && (
+              <p className="text-[11px] text-slate-400 pl-5">
+                Aceita certificados autoassinados RouterOS. Para links remotos via WAN, utilize WireGuard ou VPN segura.
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">

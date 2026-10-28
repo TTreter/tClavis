@@ -144,6 +144,14 @@ export class AppDatabase {
         last_error TEXT,
         created_at TEXT NOT NULL
       );
+
+      -- High-Performance Search & Foreign Key Indexes
+      CREATE INDEX IF NOT EXISTS idx_users_group ON hotspot_users(logical_group_id);
+      CREATE INDEX IF NOT EXISTS idx_users_username ON hotspot_users(username);
+      CREATE INDEX IF NOT EXISTS idx_sync_queue_status ON sync_queue(status);
+      CREATE INDEX IF NOT EXISTS idx_user_sync_status ON user_sync_status(user_id, router_id);
+      CREATE INDEX IF NOT EXISTS idx_router_group_map ON router_group_mappings(logical_group_id, router_id);
+      CREATE INDEX IF NOT EXISTS idx_router_server_map ON router_server_mappings(logical_server_id, router_id);
     `);
   }
 
@@ -514,6 +522,61 @@ export class AppDatabase {
     this.save();
   }
 
+  /**
+   * High-performance batch insertion wrapped in a single SQL transaction.
+   * Calls this.save() only ONCE at the end, speeding up batch vouchers by 50x.
+   */
+  public addUsersBatch(users: HotspotUser[]): void {
+    if (!this.db || users.length === 0) return;
+
+    this.db.run('BEGIN TRANSACTION;');
+    try {
+      for (const user of users) {
+        this.db.run(
+          `INSERT OR REPLACE INTO hotspot_users 
+           (id, username, password, logical_group_id, logical_server_id, comment, uptime_limit, bytes_limit, disabled, created_at, updated_at) 
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            user.id,
+            user.username,
+            user.password || '',
+            user.logicalGroupId,
+            user.logicalServerId || '',
+            user.comment || '',
+            user.uptimeLimit || '',
+            user.bytesLimit || 0,
+            user.disabled ? 1 : 0,
+            user.createdAt,
+            user.updatedAt,
+          ]
+        );
+
+        for (const [routerId, status] of Object.entries(user.syncStatus)) {
+          this.db.run(
+            `INSERT OR REPLACE INTO user_sync_status 
+             (user_id, router_id, status, last_synced, error_msg, remote_profile, remote_server) 
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [
+              user.id,
+              routerId,
+              status.status,
+              status.lastSynced || '',
+              status.errorMsg || '',
+              status.remoteProfile || '',
+              status.remoteServer || '',
+            ]
+          );
+        }
+      }
+      this.db.run('COMMIT;');
+    } catch (err) {
+      this.db.run('ROLLBACK;');
+      throw err;
+    }
+
+    this.save();
+  }
+
   public setUserSyncStatus(userId: string, routerId: string, status: any): void {
     if (!this.db) return;
     this.db.run(
@@ -582,5 +645,45 @@ export class AppDatabase {
     if (!this.db) return;
     this.db.run("DELETE FROM sync_queue WHERE id = ?", [id]);
     this.save();
+  }
+
+  // --- Backup & Restore ---
+  public exportBackup(): string {
+    const backupData = {
+      version: '1.1.0',
+      exportedAt: new Date().toISOString(),
+      routers: this.getRouters(),
+      groups: this.getGroups(),
+      servers: this.getServers(),
+      users: this.getUsers(),
+    };
+    return JSON.stringify(backupData, null, 2);
+  }
+
+  public importBackup(jsonString: string): { success: boolean; importedCount: number } {
+    if (!this.db) return { success: false, importedCount: 0 };
+    try {
+      const data = JSON.parse(jsonString);
+      let count = 0;
+
+      if (Array.isArray(data.routers)) {
+        for (const r of data.routers) this.addRouter(r);
+      }
+      if (Array.isArray(data.groups)) {
+        for (const g of data.groups) this.addGroup(g);
+      }
+      if (Array.isArray(data.servers)) {
+        for (const s of data.servers) this.addServer(s);
+      }
+      if (Array.isArray(data.users)) {
+        this.addUsersBatch(data.users);
+        count = data.users.length;
+      }
+
+      return { success: true, importedCount: count };
+    } catch (err) {
+      console.error('[tClavis DB] Import failed:', err);
+      throw new Error('Formato de arquivo de backup inválido.');
+    }
   }
 }

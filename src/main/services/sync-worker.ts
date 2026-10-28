@@ -5,6 +5,9 @@ import { BrowserWindow } from 'electron';
 export class SyncWorker {
   private timer: NodeJS.Timeout | null = null;
   private isProcessing = false;
+  // Exponential backoff tracking per router: routerId -> nextAllowedRetryTimestamp
+  private nextRetryMap: Map<string, number> = new Map();
+  private failureCountMap: Map<string, number> = new Map();
 
   constructor(
     private db: AppDatabase,
@@ -12,13 +15,13 @@ export class SyncWorker {
     private getMainWindow: () => BrowserWindow | null
   ) {}
 
-  public start(intervalMs = 30000): void {
+  public start(baseIntervalMs = 20000): void {
     if (this.timer) clearInterval(this.timer);
-    console.log(`⚡ [tClavis Worker] Sync worker started. Polling interval: ${intervalMs / 1000}s`);
+    console.log(`⚡ [tClavis Worker] Sync worker started with adaptive exponential backoff.`);
 
     this.timer = setInterval(() => {
       this.processQueue().catch((err) => console.error('[tClavis Worker] Error:', err));
-    }, intervalMs);
+    }, baseIntervalMs);
   }
 
   public stop(): void {
@@ -26,6 +29,11 @@ export class SyncWorker {
       clearInterval(this.timer);
       this.timer = null;
     }
+  }
+
+  public resetRouterBackoff(routerId: string): void {
+    this.nextRetryMap.delete(routerId);
+    this.failureCountMap.delete(routerId);
   }
 
   public async processQueue(): Promise<void> {
@@ -36,24 +44,38 @@ export class SyncWorker {
       const pendingItems = this.db.getSyncQueue();
       if (pendingItems.length === 0) return;
 
-      console.log(`⚡ [tClavis Worker] Processing ${pendingItems.length} pending sync items...`);
+      const now = Date.now();
       const routers = this.db.getRouters();
 
       for (const item of pendingItems) {
+        const nextAllowed = this.nextRetryMap.get(item.routerId) || 0;
+        if (now < nextAllowed) {
+          // In exponential backoff cooldown period
+          continue;
+        }
+
         const router = routers.find((r) => r.id === item.routerId);
         if (!router) {
           this.db.markSyncQueueCompleted(item.id);
           continue;
         }
 
-        // Quick ping to check if router is online
+        // Test connectivity
         const testRes = await this.syncEngine.testRouter(router);
         if (!testRes.success) {
-          // Still offline, skip and wait for next tick
+          // Calculate exponential backoff: 30s -> 60s -> 120s -> 300s (max 5 minutes)
+          const failures = (this.failureCountMap.get(item.routerId) || 0) + 1;
+          this.failureCountMap.set(item.routerId, failures);
+
+          const delaySec = Math.min(300, 30 * Math.pow(2, failures - 1));
+          this.nextRetryMap.set(item.routerId, now + delaySec * 1000);
+          console.warn(`⏳ [tClavis Worker] ${router.name} unreachable (${failures}x). Next retry in ${delaySec}s.`);
           continue;
         }
 
-        // Router is online! Re-process action
+        // Router is online! Reset backoff
+        this.resetRouterBackoff(item.routerId);
+
         if (item.action === 'create_user' && item.payload?.user) {
           await this.syncEngine.syncUserToCluster(item.payload.user);
           this.db.markSyncQueueCompleted(item.id);

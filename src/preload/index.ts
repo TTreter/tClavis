@@ -31,6 +31,8 @@ export const tclavisAPI = {
   // Hotspot Users & Sync
   getUsers: (): Promise<HotspotUser[]> => ipcRenderer.invoke('users:get'),
   saveUser: (user: HotspotUser): Promise<void> => ipcRenderer.invoke('users:save', user),
+  saveUsersBatch: (users: HotspotUser[]): Promise<void> =>
+    ipcRenderer.invoke('users:batch_save', users),
   deleteUser: (user: HotspotUser): Promise<void> => ipcRenderer.invoke('users:delete', user),
   syncUser: (user: HotspotUser): Promise<void> => ipcRenderer.invoke('users:sync', user),
 
@@ -50,6 +52,11 @@ export const tclavisAPI = {
     ipcRenderer.invoke('bindings:save', binding),
   deleteIpBinding: (macAddress: string): Promise<void> =>
     ipcRenderer.invoke('bindings:delete', macAddress),
+
+  // Backup & Restore
+  exportBackup: (): Promise<string> => ipcRenderer.invoke('backup:export'),
+  importBackup: (jsonContent: string): Promise<{ success: boolean; importedCount: number }> =>
+    ipcRenderer.invoke('backup:import', jsonContent),
 
   // System Stats
   getStats: (): Promise<any> => ipcRenderer.invoke('stats:get'),

@@ -25,6 +25,8 @@ import { EditUserModal } from './components/EditUserModal';
 import { CreateRouterModal } from './components/CreateRouterModal';
 import { CreateMappingModal } from './components/CreateMappingModal';
 import { ParityAuditModal } from './components/ParityAuditModal';
+import { BackupModal } from './components/BackupModal';
+import { ToastContainer, ToastMessage } from './components/Toast';
 import { Logo } from './components/Logo';
 
 declare global {
@@ -48,6 +50,22 @@ export default function App() {
   const [isRouterModalOpen, setIsRouterModalOpen] = useState(false);
   const [isMappingModalOpen, setIsMappingModalOpen] = useState(false);
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
+  const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
+
+  // Toast notifications state
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  const showToast = (message: string, type: ToastMessage['type'] = 'info') => {
+    const id = `t_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    setToasts((prev) => [...prev, { id, type, message }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 3800);
+  };
+
+  const dismissToast = (id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
 
   // Load all initial data
   const loadData = async () => {
@@ -77,67 +95,161 @@ export default function App() {
     if (window.tclavisAPI?.onSyncUpdated) {
       const unsubscribe = window.tclavisAPI.onSyncUpdated(() => {
         loadData();
+        showToast('Sincronização em segundo plano concluída!', 'info');
       });
       return () => unsubscribe();
     }
   }, []);
 
+  // Global Keyboard Shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Escape: Close any open modal
+      if (e.key === 'Escape') {
+        setIsUserModalOpen(false);
+        setIsEditUserModalOpen(false);
+        setIsRouterModalOpen(false);
+        setIsMappingModalOpen(false);
+        setIsAuditModalOpen(false);
+        setIsBackupModalOpen(false);
+      }
+      // Ctrl+N / Cmd+N: New user
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n' && !e.shiftKey) {
+        e.preventDefault();
+        setIsUserModalOpen(true);
+      }
+      // Ctrl+Shift+A: Parity audit
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'a') {
+        e.preventDefault();
+        setIsAuditModalOpen(true);
+      }
+      // Ctrl+R / F5: Refresh
+      if (e.key === 'F5' || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'r')) {
+        e.preventDefault();
+        loadData();
+        showToast('Dados e status atualizados!', 'info');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   // Handlers
   const handleSaveUser = async (user: HotspotUser) => {
-    await window.tclavisAPI?.saveUser(user);
-    await loadData();
+    try {
+      await window.tclavisAPI?.saveUser(user);
+      await loadData();
+      showToast(`Usuário "${user.username}" salvo e propagado ao cluster!`, 'success');
+    } catch (err: any) {
+      showToast('Erro ao salvar usuário: ' + err.message, 'error');
+    }
   };
 
   const handleDeleteUser = async (user: HotspotUser) => {
-    await window.tclavisAPI?.deleteUser(user);
-    await loadData();
+    try {
+      await window.tclavisAPI?.deleteUser(user);
+      await loadData();
+      showToast(`Usuário "${user.username}" removido do cluster!`, 'success');
+    } catch (err: any) {
+      showToast('Erro ao excluir usuário: ' + err.message, 'error');
+    }
   };
 
   const handleSyncUser = async (user: HotspotUser) => {
-    await window.tclavisAPI?.syncUser(user);
-    await loadData();
+    try {
+      await window.tclavisAPI?.syncUser(user);
+      await loadData();
+      showToast(`Sincronização forçada para "${user.username}"!`, 'info');
+    } catch (err: any) {
+      showToast('Erro ao sincronizar: ' + err.message, 'error');
+    }
   };
 
   const handleSaveRouter = async (router: RouterDevice) => {
-    await window.tclavisAPI?.saveRouter(router);
-    await loadData();
+    try {
+      await window.tclavisAPI?.saveRouter(router);
+      await loadData();
+      showToast(`MikroTik "${router.name}" configurado!`, 'success');
+    } catch (err: any) {
+      showToast('Erro ao salvar roteador: ' + err.message, 'error');
+    }
   };
 
   const handleDeleteRouter = async (id: string) => {
-    await window.tclavisAPI?.deleteRouter(id);
-    await loadData();
+    try {
+      await window.tclavisAPI?.deleteRouter(id);
+      await loadData();
+      showToast('Roteador removido.', 'info');
+    } catch (err: any) {
+      showToast('Erro ao remover: ' + err.message, 'error');
+    }
   };
 
   const handleTestRouter = async (router: RouterDevice) => {
     const res = await window.tclavisAPI?.testRouter(router);
     await loadData();
+    if (res?.success) {
+      showToast(`Conectado a ${router.name} (${res.latencyMs}ms)!`, 'success');
+    } else {
+      showToast(`Falha em ${router.name}: ${res?.error || 'Inacessível'}`, 'error');
+    }
     return res;
   };
 
   const handleSaveGroup = async (group: LogicalGroup) => {
-    await window.tclavisAPI?.saveGroup(group);
-    await loadData();
+    try {
+      await window.tclavisAPI?.saveGroup(group);
+      await loadData();
+      showToast(`Mapeamento De-Para "${group.name}" salvo!`, 'success');
+    } catch (err: any) {
+      showToast('Erro ao salvar grupo: ' + err.message, 'error');
+    }
   };
 
   const handleDeleteGroup = async (id: string) => {
-    await window.tclavisAPI?.deleteGroup(id);
-    await loadData();
+    try {
+      await window.tclavisAPI?.deleteGroup(id);
+      await loadData();
+      showToast('Mapeamento removido.', 'info');
+    } catch (err: any) {
+      showToast('Erro ao excluir grupo: ' + err.message, 'error');
+    }
   };
 
   const handleDeleteServer = async (id: string) => {
-    await window.tclavisAPI?.deleteServer(id);
-    await loadData();
+    try {
+      await window.tclavisAPI?.deleteServer(id);
+      await loadData();
+      showToast('Servidor lógico removido.', 'info');
+    } catch (err: any) {
+      showToast('Erro ao excluir servidor: ' + err.message, 'error');
+    }
   };
 
   const handleBatchCreateUsers = async (newUsers: HotspotUser[]) => {
-    for (const u of newUsers) {
-      await window.tclavisAPI?.saveUser(u);
+    try {
+      if (window.tclavisAPI?.saveUsersBatch) {
+        await window.tclavisAPI.saveUsersBatch(newUsers);
+      } else {
+        for (const u of newUsers) {
+          await window.tclavisAPI?.saveUser(u);
+        }
+      }
+      await loadData();
+      showToast(`⚡ ${newUsers.length} vouchers gerados e sincronizados em lote!`, 'success');
+    } catch (err: any) {
+      showToast('Erro no lote de vouchers: ' + err.message, 'error');
     }
-    await loadData();
   };
 
   const handleKickSession = async (routerId: string, sessionId: string) => {
-    await window.tclavisAPI?.kickSession(routerId, sessionId);
+    try {
+      await window.tclavisAPI?.kickSession(routerId, sessionId);
+      showToast('Sessão desconectada (Kick)!', 'success');
+    } catch (err: any) {
+      showToast('Erro ao derrubar sessão: ' + err.message, 'error');
+    }
   };
 
   const handleFetchSessions = async () => {
@@ -294,8 +406,15 @@ export default function App() {
             <span>Auditoria de Paridade</span>
           </button>
 
+          <button
+            onClick={() => setIsBackupModalOpen(true)}
+            className="w-full px-3 py-1.5 rounded-xl bg-surface hover:bg-surface-border border border-surface-border text-slate-300 hover:text-white text-xs font-medium transition flex items-center justify-center space-x-1.5"
+          >
+            <span>Backup & Restauração</span>
+          </button>
+
           <div className="text-[10px] text-slate-500 font-mono text-center pt-1">
-            tClavis v1.0.0 Desktop • RouterOS
+            tClavis v1.1.0 Desktop • RouterOS
           </div>
         </div>
       </aside>
@@ -460,6 +579,18 @@ export default function App() {
         onRepair={handleRepairDiscrepancies}
         onRefreshData={loadData}
       />
+
+      <BackupModal
+        isOpen={isBackupModalOpen}
+        onClose={() => setIsBackupModalOpen(false)}
+        onExport={() => window.tclavisAPI?.exportBackup()}
+        onImport={(json) => window.tclavisAPI?.importBackup(json)}
+        onNotify={showToast}
+        onRefreshData={loadData}
+      />
+
+      {/* Floating Notifications */}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

@@ -1,9 +1,10 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, shell, session } from 'electron';
 import * as path from 'path';
 import { AppDatabase } from './db/database';
 import { SyncEngine } from './mikrotik/sync-engine';
 import { SyncWorker } from './services/sync-worker';
 import { TrayManager } from './services/tray-manager';
+import { SecurityValidator } from './security/validator';
 import { RouterDevice, LogicalGroup, LogicalServer, HotspotUser, ParityDiscrepancy, IpBinding } from '../shared/types';
 
 let mainWindow: BrowserWindow | null = null;
@@ -31,6 +32,17 @@ async function createWindow() {
       nodeIntegration: false,
     },
     autoHideMenuBar: true,
+  });
+
+  // Security: Deny all popups/new windows and redirect external URLs to the default browser
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url);
+    return { action: 'deny' };
+  });
+
+  // Security: Deny all hardware/device permission requests (camera, mic, geolocation, notifications)
+  session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
+    callback(false);
   });
 
   const isDev = process.env.NODE_ENV === 'development';
@@ -65,10 +77,34 @@ function registerIpcHandlers() {
 
   // Users & Sync
   ipcMain.handle('users:get', async () => db.getUsers());
-  ipcMain.handle('users:save', async (_, user: HotspotUser) => {
+  ipcMain.handle('users:save', async (_, rawUser: HotspotUser) => {
+    // Input sanitization & validation
+    const user: HotspotUser = {
+      ...rawUser,
+      username: SecurityValidator.sanitizeUsername(rawUser.username),
+      password: SecurityValidator.sanitizePassword(rawUser.password || ''),
+      comment: SecurityValidator.sanitizeComment(rawUser.comment),
+      uptimeLimit: rawUser.uptimeLimit ? SecurityValidator.validateUptimeLimit(rawUser.uptimeLimit) : undefined,
+    };
+
     db.addUser(user);
     syncEngine.syncUserToCluster(user).catch((err) => console.error('Sync error:', err));
   });
+
+  ipcMain.handle('users:batch_save', async (_, rawUsers: HotspotUser[]) => {
+    const validatedUsers = rawUsers.map((u) => ({
+      ...u,
+      username: SecurityValidator.sanitizeUsername(u.username),
+      password: SecurityValidator.sanitizePassword(u.password || ''),
+      comment: SecurityValidator.sanitizeComment(u.comment),
+      uptimeLimit: u.uptimeLimit ? SecurityValidator.validateUptimeLimit(u.uptimeLimit) : undefined,
+    }));
+
+    db.addUsersBatch(validatedUsers);
+    // Sync batch to cluster using connection pool
+    syncEngine.syncUsersBatchToCluster(validatedUsers).catch((err) => console.error('Batch sync error:', err));
+  });
+
   ipcMain.handle('users:sync', async (_, user: HotspotUser) => syncEngine.syncUserToCluster(user));
   ipcMain.handle('users:delete', async (_, user: HotspotUser) => syncEngine.deleteUserFromCluster(user));
 
@@ -86,12 +122,21 @@ function registerIpcHandlers() {
 
   // IP & MAC Bindings
   ipcMain.handle('bindings:get', async () => syncEngine.getIpBindings());
-  ipcMain.handle('bindings:save', async (_, binding: Omit<IpBinding, 'id'>) =>
-    syncEngine.addIpBinding(binding)
-  );
+  ipcMain.handle('bindings:save', async (_, rawBinding: Omit<IpBinding, 'id'>) => {
+    const binding: Omit<IpBinding, 'id'> = {
+      ...rawBinding,
+      macAddress: SecurityValidator.validateMacAddress(rawBinding.macAddress),
+      comment: SecurityValidator.sanitizeComment(rawBinding.comment),
+    };
+    return syncEngine.addIpBinding(binding);
+  });
   ipcMain.handle('bindings:delete', async (_, macAddress: string) =>
-    syncEngine.deleteIpBinding(macAddress)
+    syncEngine.deleteIpBinding(SecurityValidator.validateMacAddress(macAddress))
   );
+
+  // Backup & Restore
+  ipcMain.handle('backup:export', async () => db.exportBackup());
+  ipcMain.handle('backup:import', async (_, jsonContent: string) => db.importBackup(jsonContent));
 
   // Stats
   ipcMain.handle('stats:get', async () => {
