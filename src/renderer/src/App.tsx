@@ -21,6 +21,7 @@ import { ActiveSessionsView } from './views/ActiveSessionsView';
 import { VouchersView } from './views/VouchersView';
 import { IpBindingView } from './views/IpBindingView';
 import { CreateUserModal } from './components/CreateUserModal';
+import { EditUserModal } from './components/EditUserModal';
 import { CreateRouterModal } from './components/CreateRouterModal';
 import { CreateMappingModal } from './components/CreateMappingModal';
 import { ParityAuditModal } from './components/ParityAuditModal';
@@ -41,6 +42,8 @@ export default function App() {
 
   // Modals state
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
+  const [isEditUserModalOpen, setIsEditUserModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<HotspotUser | null>(null);
   const [isRouterModalOpen, setIsRouterModalOpen] = useState(false);
   const [isMappingModalOpen, setIsMappingModalOpen] = useState(false);
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
@@ -354,6 +357,10 @@ export default function App() {
               groups={groups}
               routers={routers}
               onOpenCreate={() => setIsUserModalOpen(true)}
+              onOpenEdit={(user) => {
+                setEditingUser(user);
+                setIsEditUserModalOpen(true);
+              }}
               onDeleteUser={handleDeleteUser}
               onSyncUser={handleSyncUser}
               onSaveUser={handleSaveUser}
@@ -411,6 +418,19 @@ export default function App() {
       <CreateUserModal
         isOpen={isUserModalOpen}
         onClose={() => setIsUserModalOpen(false)}
+        onSave={handleSaveUser}
+        groups={groups}
+        servers={servers}
+        routers={routers}
+      />
+
+      <EditUserModal
+        isOpen={isEditUserModalOpen}
+        user={editingUser}
+        onClose={() => {
+          setIsEditUserModalOpen(false);
+          setEditingUser(null);
+        }}
         onSave={handleSaveUser}
         groups={groups}
         servers={servers}

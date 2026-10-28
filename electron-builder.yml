@@ -8,7 +8,6 @@ files:
   - dist/**
   - dist-electron/**
   - package.json
-  - node_modules/sql.js/dist/sql-wasm.wasm
 win:
   target:
     - target: nsis
@@ -17,7 +16,7 @@ win:
     - target: portable
       arch:
         - x64
-  icon: tclavis-icon.svg
+  icon: build/icon.ico
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Plus, Trash2, RefreshCw, Eye, EyeOff, Shield, CheckCircle, Clock, AlertTriangle } from 'lucide-react';
+import { Search, Plus, Trash2, RefreshCw, Eye, EyeOff, Shield, Edit3 } from 'lucide-react';
 import { HotspotUser, LogicalGroup, RouterDevice } from '../../../shared/types';
 
 interface Props {
@@ -7,6 +7,7 @@ interface Props {
   groups: LogicalGroup[];
   routers: RouterDevice[];
   onOpenCreate: () => void;
+  onOpenEdit: (user: HotspotUser) => void;
   onDeleteUser: (user: HotspotUser) => Promise<void>;
   onSyncUser: (user: HotspotUser) => Promise<void>;
   onSaveUser: (user: HotspotUser) => Promise<void>;
@@ -17,6 +18,7 @@ export const UsersView: React.FC<Props> = ({
   groups,
   routers,
   onOpenCreate,
+  onOpenEdit,
   onDeleteUser,
   onSyncUser,
   onSaveUser,
@@ -178,6 +180,15 @@ export const UsersView: React.FC<Props> = ({
 
                     <td className="py-3 px-4 text-right">
                       <div className="flex items-center justify-end space-x-2">
+                        <button
+                          type="button"
+                          title="Editar usuário e trocar senha/grupo"
+                          onClick={() => onOpenEdit(user)}
+                          className="p-1.5 rounded-lg bg-surface hover:bg-surface-border text-slate-300 hover:text-primary transition border border-surface-border"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+
                         <button
                           type="button"
                           title="Sincronizar nos roteadores"

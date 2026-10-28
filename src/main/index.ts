@@ -3,12 +3,14 @@ import * as path from 'path';
 import { AppDatabase } from './db/database';
 import { SyncEngine } from './mikrotik/sync-engine';
 import { SyncWorker } from './services/sync-worker';
+import { TrayManager } from './services/tray-manager';
 import { RouterDevice, LogicalGroup, LogicalServer, HotspotUser, ParityDiscrepancy, IpBinding } from '../shared/types';
 
 let mainWindow: BrowserWindow | null = null;
 let db: AppDatabase;
 let syncEngine: SyncEngine;
 let syncWorker: SyncWorker;
+let trayManager: TrayManager;
 
 async function createWindow() {
   mainWindow = new BrowserWindow({
@@ -118,6 +120,14 @@ app.whenReady().then(async () => {
   syncWorker = new SyncWorker(db, syncEngine, () => mainWindow);
   syncWorker.start(30000); // Poll every 30 seconds
 
+  trayManager = new TrayManager(
+    () => mainWindow,
+    async () => {
+      await syncWorker.processQueue();
+    }
+  );
+  trayManager.initialize();
+
   registerIpcHandlers();
   await createWindow();
 
@@ -128,6 +138,7 @@ app.whenReady().then(async () => {
 
 app.on('window-all-closed', () => {
   if (syncWorker) syncWorker.stop();
+  if (trayManager) trayManager.destroy();
   if (process.platform !== 'darwin') {
     app.quit();
   }
