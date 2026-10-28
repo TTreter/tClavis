@@ -44,7 +44,7 @@ export class AppDatabase {
     }
 
     this.createTables();
-    this.seedDefaultsIfEmpty();
+    // Zero Demo: Inicialização limpa sem dados fictícios (seedDefaultsIfEmpty desativado)
     this.save();
   }
 
@@ -180,110 +180,11 @@ export class AppDatabase {
     } catch (_) {}
   }
 
+  /**
+   * @deprecated Desativado na v2.2.0 para garantir que novas instalações iniciem 100% zeradas (Zero Demo).
+   */
   private seedDefaultsIfEmpty(): void {
-    if (!this.db) return;
-
-    // Check routers
-    const routerCountRes = this.db.exec("SELECT COUNT(*) FROM routers;");
-    const count = routerCountRes[0]?.values[0]?.[0] as number;
-
-    if (count === 0) {
-      // Seed default 3 routers as planned in the user's scenario!
-      this.addRouter({
-        id: 'mk-1',
-        name: 'MikroTik 1 (Sede)',
-        host: '192.168.88.1',
-        port: 8728,
-        useSsl: false,
-        username: 'admin',
-        passwordEncrypted: '',
-        status: 'offline',
-        routerOsVersion: 'RouterOS v7.14',
-      });
-
-      this.addRouter({
-        id: 'mk-2',
-        name: 'MikroTik 2 (Filial)',
-        host: '192.168.89.1',
-        port: 8728,
-        useSsl: false,
-        username: 'admin',
-        passwordEncrypted: '',
-        status: 'offline',
-        routerOsVersion: 'RouterOS v7.14',
-      });
-
-      this.addRouter({
-        id: 'mk-3',
-        name: 'MikroTik 3 (Anexo)',
-        host: '192.168.90.1',
-        port: 8728,
-        useSsl: false,
-        username: 'admin',
-        passwordEncrypted: '',
-        status: 'offline',
-        routerOsVersion: 'RouterOS v6.49',
-      });
-
-      // Seed Default Logical Groups with cross-mappings
-      const groupVisitante: LogicalGroup = {
-        id: 'grp-visitantes',
-        name: 'Visitantes (10 Mbps)',
-        description: 'Acesso padrão para visitantes com limite de 10 Mega',
-        rateLimit: '10M/10M',
-        routerMappings: {
-          'mk-1': 'Perfil_10M',
-          'mk-2': 'Guest_Eventos',
-          'mk-3': 'default',
-        },
-      };
-      this.addGroup(groupVisitante);
-
-      const groupVip: LogicalGroup = {
-        id: 'grp-vip',
-        name: 'Diretoria & VIP',
-        description: 'Velocidade máxima sem limitação de tempo',
-        rateLimit: '100M/100M',
-        routerMappings: {
-          'mk-1': 'VIP_50M',
-          'mk-2': 'Guest_VIP',
-          'mk-3': 'profile_vip',
-        },
-      };
-      this.addGroup(groupVip);
-
-      // Seed Default Logical Server with cross-mappings
-      const serverHotspot: LogicalServer = {
-        id: 'srv-publico',
-        name: 'Hotspot Geral',
-        description: 'Servidor Hotspot principal de cada unidade',
-        routerMappings: {
-          'mk-1': 'hotspot_sede',
-          'mk-2': 'hs_filial',
-          'mk-3': 'all',
-        },
-      };
-      this.addServer(serverHotspot);
-
-      // Seed sample synced user
-      this.addUser({
-        id: 'usr-1',
-        username: 'visitante.teste',
-        password: 'wifi@2026',
-        logicalGroupId: 'grp-visitantes',
-        logicalServerId: 'srv-publico',
-        comment: 'Usuário inicial de teste',
-        uptimeLimit: '1d',
-        disabled: false,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        syncStatus: {
-          'mk-1': { status: 'synced', remoteProfile: 'Perfil_10M', remoteServer: 'hotspot_sede' },
-          'mk-2': { status: 'synced', remoteProfile: 'Guest_Eventos', remoteServer: 'hs_filial' },
-          'mk-3': { status: 'synced', remoteProfile: 'default', remoteServer: 'all' },
-        },
-      });
-    }
+    // No-op intencional: novas instalações devem iniciar completamente limpas sem dados fictícios.
   }
 
   // --- Routers CRUD ---
@@ -689,7 +590,29 @@ export class AppDatabase {
         groupsCreated++;
       }
 
-      const assignedGroupId = matchedGroup ? matchedGroup.id : (groups[0]?.id || 'grp-visitantes');
+      let assignedGroupId: string;
+      if (matchedGroup) {
+        assignedGroupId = matchedGroup.id;
+      } else if (groups.length > 0) {
+        assignedGroupId = groups[0].id;
+      } else {
+        // Base totalmente limpa: criar programmaticamente um grupo padrão seguro
+        const defaultGroupId = `grp_default_${Date.now()}`;
+        const defaultMappings: Record<string, string> = {};
+        for (const r of routers) {
+          defaultMappings[r.id] = targetProfile || 'default';
+        }
+        const defaultGroup: LogicalGroup = {
+          id: defaultGroupId,
+          name: 'Grupo Padrão (Importado)',
+          description: `Grupo padrão gerado automaticamente na importação de ${sourceRouterName}`,
+          routerMappings: defaultMappings,
+        };
+        this.addGroup(defaultGroup);
+        groups = this.getGroups();
+        groupsCreated++;
+        assignedGroupId = defaultGroupId;
+      }
 
       // 2. Build sync status matrix
       const syncStatus: HotspotUser['syncStatus'] = {};
@@ -887,12 +810,45 @@ export class AppDatabase {
 
   public clearDemoData(): void {
     if (!this.db) return;
+
+    // 1. Remover usuário de demonstração legado
     this.db.run("DELETE FROM hotspot_users WHERE id = 'usr-1';");
     this.db.run("DELETE FROM user_sync_status WHERE user_id = 'usr-1';");
+
+    // 2. Remover roteadores fictícios (mk-1, mk-2, mk-3) caso não possuam usuários reais vinculados
+    const demoRouters = ['mk-1', 'mk-2', 'mk-3'];
+    for (const rid of demoRouters) {
+      const userCheck = this.db.exec(`SELECT COUNT(*) FROM user_sync_status WHERE router_id = '${rid}' AND user_id != 'usr-1';`);
+      const linkedCount = (userCheck[0]?.values[0]?.[0] as number) || 0;
+      if (linkedCount === 0) {
+        this.deleteRouter(rid);
+      }
+    }
+
+    // 3. Remover grupos de teste (grp-visitantes, grp-vip) caso não estejam associados a contas reais
+    const demoGroups = ['grp-visitantes', 'grp-vip'];
+    for (const gid of demoGroups) {
+      const userCheck = this.db.exec(`SELECT COUNT(*) FROM hotspot_users WHERE logical_group_id = '${gid}' AND id != 'usr-1';`);
+      const linkedCount = (userCheck[0]?.values[0]?.[0] as number) || 0;
+      if (linkedCount === 0) {
+        this.deleteGroup(gid);
+      }
+    }
+
+    // 4. Remover servidor teste (srv-publico) caso não esteja associado a contas reais
+    const demoServers = ['srv-publico'];
+    for (const sid of demoServers) {
+      const userCheck = this.db.exec(`SELECT COUNT(*) FROM hotspot_users WHERE logical_server_id = '${sid}' AND id != 'usr-1';`);
+      const linkedCount = (userCheck[0]?.values[0]?.[0] as number) || 0;
+      if (linkedCount === 0) {
+        this.deleteServer(sid);
+      }
+    }
+
     this.addLog({
       level: 'info',
       category: 'security',
-      message: 'Dados de demonstração removidos pelo operador.',
+      message: 'Dados de demonstração legados purgados com sucesso.',
     });
     this.save();
   }

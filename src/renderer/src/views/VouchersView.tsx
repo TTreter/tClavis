@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import QRCode from 'qrcode';
 import {
   Ticket,
@@ -50,8 +50,22 @@ export const VouchersView: React.FC<Props> = ({
   const [generatedVouchers, setGeneratedVouchers] = useState<GeneratedVoucher[]>([]);
   const [generating, setGenerating] = useState(false);
 
+  // Sincronização reativa de grupos e servidores ao carregar dados do banco
+  useEffect(() => {
+    if (groups.length > 0 && (!selectedGroupId || !groups.some((g) => g.id === selectedGroupId))) {
+      setSelectedGroupId(groups[0].id);
+    }
+    if (servers.length > 0 && (!selectedServerId || !servers.some((s) => s.id === selectedServerId))) {
+      setSelectedServerId(servers[0].id);
+    }
+    if (routers.length > 0 && !hotspotHost) {
+      setHotspotHost(routers[0].host);
+    }
+  }, [groups, servers, routers]);
+
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (groups.length === 0 || routers.length === 0) return;
     const count = parseInt(quantity, 10);
     const len = parseInt(codeLength, 10);
     if (isNaN(count) || count <= 0) return;
@@ -199,6 +213,14 @@ export const VouchersView: React.FC<Props> = ({
           <span>Configuração do Lote de Acesso</span>
         </div>
 
+        {/* 0 Groups Alert */}
+        {groups.length === 0 && (
+          <div className="p-3 bg-accent-amber/10 border border-accent-amber/30 rounded-xl flex items-center space-x-2 text-accent-amber text-xs">
+            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            <span>Cadastre ao menos um Grupo Lógico para emitir vouchers.</span>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <label className="block text-xs font-semibold text-slate-300 mb-1">Quantidade de Vouchers</label>
@@ -313,7 +335,7 @@ export const VouchersView: React.FC<Props> = ({
         <div className="flex justify-end pt-2">
           <button
             type="submit"
-            disabled={generating || routers.length === 0}
+            disabled={generating || routers.length === 0 || groups.length === 0}
             className="px-5 py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-background font-semibold text-sm transition shadow-glow-primary flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {generating && <RefreshCw className="w-4 h-4 animate-spin" />}

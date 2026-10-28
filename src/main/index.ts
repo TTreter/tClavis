@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, shell, session } from 'electron';
 import * as path from 'path';
+import * as fs from 'fs';
 import { AppDatabase } from './db/database';
 import { SyncEngine } from './mikrotik/sync-engine';
 import { SyncWorker } from './services/sync-worker';
@@ -9,6 +10,21 @@ import { MndpDiscovery } from './mikrotik/mndp-discovery';
 import { GitHubUpdater } from './updater/githubUpdater';
 import { RouterDevice, LogicalGroup, LogicalServer, HotspotUser, ParityDiscrepancy, IpBinding, ImportUsersBatchOptions } from '../shared/types';
 
+// Trava de Instância Única (Single Instance Lock)
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  app.quit();
+  process.exit(0);
+}
+
+app.on('second-instance', () => {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    if (!mainWindow.isVisible()) mainWindow.show();
+    mainWindow.focus();
+  }
+});
+
 let mainWindow: BrowserWindow | null = null;
 let db: AppDatabase;
 let syncEngine: SyncEngine;
@@ -17,9 +33,14 @@ let trayManager: TrayManager;
 let updater: GitHubUpdater;
 
 async function createWindow() {
+  const assetIco = path.join(__dirname, 'assets/icon.ico');
+  const assetPng = path.join(__dirname, 'assets/icon.png');
+  const devIco = path.resolve(__dirname, '../../build/icon.ico');
+  const devPng = path.resolve(__dirname, '../../build/icon.png');
+
   const iconPath = process.platform === 'win32'
-    ? path.resolve(__dirname, '../../build/icon.ico')
-    : path.resolve(__dirname, '../../build/icon.png');
+    ? (fs.existsSync(assetIco) ? assetIco : devIco)
+    : (fs.existsSync(assetPng) ? assetPng : devPng);
 
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -277,6 +298,12 @@ app.whenReady().then(async () => {
 
 app.on('before-quit', () => {
   (app as any).isQuitting = true;
+  if (trayManager) {
+    trayManager.destroy();
+  }
+  if (syncWorker) {
+    syncWorker.stop();
+  }
 });
 
 app.on('window-all-closed', () => {

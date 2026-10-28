@@ -87,6 +87,13 @@ export const UsersView: React.FC<Props> = ({
     }
   }, [isUnlocked]);
 
+  // Sincronização reativa de targetBatchGroupId com a lista de grupos carregada
+  useEffect(() => {
+    if (groups.length > 0 && (!targetBatchGroupId || !groups.some((g) => g.id === targetBatchGroupId))) {
+      setTargetBatchGroupId(groups[0].id);
+    }
+  }, [groups, targetBatchGroupId]);
+
   const togglePasswordVisibility = (userId: string) => {
     const isCurrentlyRevealed = !!revealedPasswords[userId];
     if (isCurrentlyRevealed) {
@@ -506,6 +513,32 @@ export const UsersView: React.FC<Props> = ({
                           Adicionar MikroTik
                         </button>
                       )}
+                    </div>
+                  ) : users.length === 0 ? (
+                    <div className="space-y-3 max-w-sm mx-auto">
+                      <DownloadCloud className="w-10 h-10 text-primary mx-auto" />
+                      <div className="font-semibold text-white">Nenhum usuário cadastrado</div>
+                      <div className="text-xs text-slate-400">
+                        Crie seu primeiro usuário Hotspot ou importe contas existentes diretamente dos roteadores MikroTik.
+                      </div>
+                      <div className="flex items-center justify-center space-x-3 pt-2">
+                        <button
+                          type="button"
+                          onClick={onOpenCreate}
+                          className="px-4 py-2 rounded-xl bg-primary hover:bg-primary-hover text-background font-semibold text-xs transition shadow-glow-primary flex items-center space-x-1.5"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Novo Usuário</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={onOpenImport}
+                          className="px-4 py-2 rounded-xl bg-surface hover:bg-surface-border text-slate-200 border border-surface-border font-semibold text-xs transition flex items-center space-x-1.5"
+                        >
+                          <DownloadCloud className="w-3.5 h-3.5" />
+                          <span>Importar do MikroTik</span>
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     <div className="space-y-3 max-w-sm mx-auto">

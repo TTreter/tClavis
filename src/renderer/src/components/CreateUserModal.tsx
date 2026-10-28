@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Key, Shield, Clock, HardDrive, RefreshCw, Layers, AlertTriangle } from 'lucide-react';
 import { HotspotUser, LogicalGroup, LogicalServer, RouterDevice } from '../../../shared/types';
 
@@ -27,6 +27,19 @@ export const CreateUserModal: React.FC<Props> = ({
   const [bytesLimitMb, setBytesLimitMb] = useState('');
   const [comment, setComment] = useState('');
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Sincronização reativa dos selects quando dados do banco carregarem
+  useEffect(() => {
+    if (!isOpen) return;
+    setErrorMessage(null); // Limpar erros anteriores
+    if (groups.length > 0 && (!selectedGroupId || !groups.some((g) => g.id === selectedGroupId))) {
+      setSelectedGroupId(groups[0].id);
+    }
+    if (servers.length > 0 && (!selectedServerId || !servers.some((s) => s.id === selectedServerId))) {
+      setSelectedServerId(servers[0].id);
+    }
+  }, [isOpen, groups, servers]);
 
   if (!isOpen) return null;
 
@@ -44,7 +57,17 @@ export const CreateUserModal: React.FC<Props> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!username.trim() || !selectedGroupId) return;
+    setErrorMessage(null);
+
+    // Validação explícita eliminando retorno silencioso (silent abort)
+    if (!username.trim()) {
+      setErrorMessage('Por favor, informe o nome de usuário.');
+      return;
+    }
+    if (!selectedGroupId) {
+      setErrorMessage('Selecione um Grupo Lógico para mapear os perfis dos roteadores.');
+      return;
+    }
 
     setLoading(true);
     try {
@@ -75,7 +98,7 @@ export const CreateUserModal: React.FC<Props> = ({
       await onSave(newUser);
       onClose();
     } catch (err: any) {
-      alert('Erro ao criar usuário: ' + err.message);
+      setErrorMessage(err.message || 'Erro ao criar usuário.');
     } finally {
       setLoading(false);
     }
@@ -118,10 +141,35 @@ export const CreateUserModal: React.FC<Props> = ({
               </button>
             </div>
           </div>
+        ) : groups.length === 0 ? (
+          /* 0 Groups Guard */
+          <div className="p-8 text-center space-y-3">
+            <AlertTriangle className="w-12 h-12 text-accent-amber mx-auto" />
+            <h3 className="font-bold text-white text-base">Nenhum Grupo Lógico Cadastrado</h3>
+            <p className="text-xs text-slate-400 max-w-sm mx-auto">
+              Para cadastrar usuários e sincronizá-los com o MikroTik, configure ao menos um grupo no menu <strong>Mapeamento De-Para</strong>.
+            </p>
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-5 py-2.5 rounded-xl bg-surface hover:bg-surface-border text-white text-xs font-semibold transition"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
         ) : (
           /* Form Body */
           <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto flex-1">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {errorMessage && (
+              <div className="p-3 bg-accent-red/10 border border-accent-red/30 rounded-xl flex items-center space-x-2 text-accent-red text-xs">
+                <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1">Nome de Usuário / Login *</label>
               <input

@@ -18,6 +18,8 @@ dist-electron/
 build/*
 !build/icon.ico
 !build/icon.png
+!build/tray-icon.png
+!build/social-preview.png
 out/
 release/
 *.exe

@@ -1,6 +1,6 @@
 {
   "name": "tclavis",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "tClavis - MikroTik Hotspot Multi-Router Sync Manager",
   "author": "Tiago Treter",
   "license": "MIT",
@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "node scripts/dev.js",
     "build:icon": "electron scripts/render-icon.js",
+    "build:preview": "electron scripts/generate-social-preview.js",
     "build:electron": "node scripts/build-electron.js",
     "build:renderer": "vite build",
     "build": "npm run build:icon && npm run build:renderer && npm run build:electron && electron-builder",

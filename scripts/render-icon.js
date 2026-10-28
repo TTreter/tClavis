@@ -50,6 +50,15 @@ app.whenReady().then(async () => {
   const icoPath = path.join(buildDir, 'icon.ico');
   fs.writeFileSync(icoPath, Buffer.concat([icoHeader, icoEntry, png256]));
 
-  console.log('✨ [tClavis] Crystal clear icon.png (512x512) and icon.ico rendered directly from SVG!');
+  // Now render high-contrast transparent Tray Icon (tray-icon.png)
+  const traySvgPath = path.resolve(__dirname, '../public/tclavis-tray.svg');
+  await win.loadFile(traySvgPath);
+  await new Promise((r) => setTimeout(r, 400));
+  const trayNativeImg = await win.capturePage({ x: 0, y: 0, width: 512, height: 512 });
+  const tray32 = trayNativeImg.resize({ width: 32, height: 32, quality: 'best' });
+  const trayPath = path.join(buildDir, 'tray-icon.png');
+  fs.writeFileSync(trayPath, tray32.toPNG());
+
+  console.log('✨ [tClavis] Crystal clear icon.png (512x512), icon.ico, and high-contrast tray-icon.png (32x32) rendered directly from SVG!');
   app.quit();
 });

@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Key Body Gradient (High Visibility Luminous Electric Cyan) -->
+    <linearGradient id="tclavis-tray-key" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="20%" stop-color="#38bdf8" />
+      <stop offset="60%" stop-color="#00e5ff" />
+      <stop offset="100%" stop-color="#0284c7" />
+    </linearGradient>
+
+    <!-- Inner Core Gradient -->
+    <linearGradient id="tclavis-tray-core" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="1" />
+      <stop offset="100%" stop-color="#00e5ff" stop-opacity="0.8" />
+    </linearGradient>
+
+    <filter id="tclavis-tray-glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="6" flood-color="#00e5ff" flood-opacity="0.9" />
+    </filter>
+  </defs>
+
+  <!-- Master Key (45-degree Angled Precision) - Transparent Background for Tray -->
+  <g transform="rotate(135 256 262)" filter="url(#tclavis-tray-glow)">
+    <!-- 1. Geometric Hex-Rounded Key Head -->
+    <path d="M 226 95
+             L 286 95
+             A 70 70 0 0 1 334 142
+             L 334 186
+             A 70 70 0 0 1 286 235
+             L 226 235
+             A 70 70 0 0 1 178 186
+             L 178 142
+             A 70 70 0 0 1 226 95 Z"
+          fill="url(#tclavis-tray-key)"
+          stroke="#ffffff"
+          stroke-width="6" />
+
+    <!-- Inner Geometric Core -->
+    <rect x="222" y="131" width="68" height="68" rx="20" fill="#04060d" stroke="url(#tclavis-tray-core)" stroke-width="6" />
+    <circle cx="256" cy="165" r="14" fill="#00e5ff" />
+
+    <!-- 2. Stepped Collar -->
+    <rect x="230" y="235" width="52" height="14" rx="4" fill="url(#tclavis-tray-key)" stroke="#ffffff" stroke-width="3" />
+
+    <!-- 3. Key Shaft (Haste Central) -->
+    <rect x="238" y="246" width="36" height="184" rx="6" fill="url(#tclavis-tray-key)" stroke="#ffffff" stroke-width="2" />
+    <!-- Longitudinal Dual Bevel Grooves -->
+    <line x1="250" y1="256" x2="250" y2="420" stroke="#04060d" stroke-width="5" stroke-linecap="round" />
+    <line x1="262" y1="256" x2="262" y2="420" stroke="#ffffff" stroke-width="4" stroke-linecap="round" opacity="0.9" />
+
+    <!-- 4. Angled Precision Teeth -->
+    <path d="M 274 316
+             L 335 316
+             L 348 329
+             L 348 344
+             L 335 344
+             L 310 344
+             L 310 360
+             L 345 360
+             L 358 373
+             L 358 392
+             L 345 392
+             L 320 392
+             L 320 406
+             L 332 406
+             L 342 416
+             L 342 426
+             L 332 426
+             L 274 426 Z"
+          fill="url(#tclavis-tray-key)"
+          stroke="#ffffff"
+          stroke-width="4" />
+  </g>
+</svg>

@@ -75,7 +75,7 @@ export const BackupModal: React.FC<Props> = ({
   };
 
   const handleClearDemoClick = async () => {
-    if (confirm('Deseja remover as contas de demonstração iniciais e manter apenas seus roteadores e usuários reais?')) {
+    if (confirm('Deseja purgar roteadores, grupos e contas de demonstração legadas (anteriores à v2.2.0) e manter estritamente seus dados reais?')) {
       try {
         if (onClearDemoData) {
           await onClearDemoData();
@@ -83,7 +83,7 @@ export const BackupModal: React.FC<Props> = ({
           await window.tclavisAPI.clearDemoData();
         }
         await onRefreshData();
-        onNotify('Dados de demonstração removidos!', 'info');
+        onNotify('Dados de demonstração legados purgados com sucesso!', 'info');
       } catch (err: any) {
         onNotify('Erro ao limpar dados: ' + err.message, 'error');
       }
@@ -196,14 +196,14 @@ export const BackupModal: React.FC<Props> = ({
           <div className="p-3 bg-surface/50 border border-surface-border rounded-xl flex items-center justify-between">
             <div className="text-xs">
               <span className="font-semibold text-slate-300 block">Ambiente de Produção</span>
-              <span className="text-[10px] text-slate-500">Expurgar usuários de demonstração iniciais</span>
+              <span className="text-[10px] text-slate-500">Expurgar dados de teste legados (pre-v2.2.0)</span>
             </div>
             <button
               onClick={handleClearDemoClick}
               className="px-2.5 py-1 rounded-lg bg-surface hover:bg-accent-rose/20 text-slate-400 hover:text-accent-rose border border-surface-border text-xs transition flex items-center space-x-1"
             >
               <Trash2 className="w-3 h-3" />
-              <span>Limpar Demos</span>
+              <span>Remover Demos Legadas</span>
             </button>
           </div>
         </div>

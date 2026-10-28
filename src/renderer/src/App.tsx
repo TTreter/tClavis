@@ -260,6 +260,7 @@ export default function App() {
       showToast(`Usuário "${user.username}" salvo e propagado ao cluster!`, 'success');
     } catch (err: any) {
       showToast('Erro ao salvar usuário: ' + err.message, 'error');
+      throw err;
     }
   };
 

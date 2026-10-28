@@ -7,6 +7,7 @@ directories:
 files:
   - dist/**
   - dist-electron/**
+  - build/**
   - package.json
 win:
   target:

@@ -298,12 +298,12 @@ export const SettingsView: React.FC<Props> = ({
     requireAuth(async () => {
       if (
         window.confirm(
-          'Atenção: Isso removerá os dados de demonstração do aplicativo. Os usuários sincronizados com o MikroTik não serão afetados. Continuar?'
+          'Atenção: Isso purgará roteadores, grupos e usuários de demonstração legados criados em versões anteriores à v2.2.0. Roteadores e contas reais em produção não serão afetados. Deseja continuar?'
         )
       ) {
         if (window.tclavisAPI?.clearDemoData) {
           await window.tclavisAPI.clearDemoData();
-          onShowToast('Dados de demonstração removidos.', 'success');
+          onShowToast('Dados de demonstração legados purgados com sucesso.', 'success');
         }
       }
     });
@@ -629,8 +629,8 @@ export const SettingsView: React.FC<Props> = ({
             </div>
 
             <p className="text-xs text-slate-400 leading-relaxed">
-              Se você utilizou dados de exemplo na primeira instalação, você pode limpar os registros
-              fictícios mantendo suas configurações de roteadores e mapeamentos reais intactas.
+              Purga roteadores, grupos e contas de teste legados que possam ter vindo de versões
+              anteriores à v2.2.0, preservando estritamente suas configurações de roteadores e usuários reais.
             </p>
 
             <button
@@ -638,7 +638,7 @@ export const SettingsView: React.FC<Props> = ({
               className="flex items-center justify-center space-x-2 w-full py-2.5 bg-surface-card border border-surface-border hover:bg-surface-border text-slate-300 rounded-xl text-xs font-bold transition"
             >
               <Trash2 className="w-4 h-4" />
-              <span>Resetar Dados de Demonstração</span>
+              <span>Remover Dados de Demonstração Legados</span>
             </button>
           </div>
         </div>

@@ -42,7 +42,17 @@ async function buildElectron() {
     fs.copyFileSync(wasmSrc, wasmDest);
   }
 
-  console.log('⚡ [tClavis] Electron main and preload built successfully.');
+  // Copy icon assets to dist-electron/main/assets
+  const assetsDir = path.join(mainOutDir, 'assets');
+  fs.mkdirSync(assetsDir, { recursive: true });
+  ['icon.png', 'icon.ico', 'tray-icon.png'].forEach((file) => {
+    const src = path.resolve(__dirname, '../build', file);
+    if (fs.existsSync(src)) {
+      fs.copyFileSync(src, path.join(assetsDir, file));
+    }
+  });
+
+  console.log('⚡ [tClavis] Electron main and preload built successfully (with bundled assets).');
 }
 
 if (require.main === module) {
