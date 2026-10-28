@@ -5,121 +5,110 @@ export const Logo: React.FC<{ className?: string }> = ({ className = 'w-9 h-9' }
     <svg
       viewBox="0 0 512 512"
       className={className}
-      fill="none"
       xmlns="http://www.w3.org/2000/svg"
     >
       <defs>
-        <linearGradient id="logo-bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#070a14" />
-          <stop offset="50%" stopColor="#0c1322" />
-          <stop offset="100%" stopColor="#050811" />
+        {/* Background Gradient */}
+        <linearGradient id="logo-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#080d1a" />
+          <stop offset="50%" stopColor="#0e172a" />
+          <stop offset="100%" stopColor="#04060d" />
         </linearGradient>
 
-        <linearGradient id="logo-primary-glow" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#00f2fe" />
-          <stop offset="35%" stopColor="#38bdf8" />
-          <stop offset="70%" stopColor="#6366f1" />
-          <stop offset="100%" stopColor="#a855f7" />
-        </linearGradient>
-
-        <linearGradient id="logo-cyan-glow" x1="0%" y1="0%" x2="100%" y2="0%">
+        {/* Key Body Gradient (Electric Cyan to Cobalt) */}
+        <linearGradient id="logo-key" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stopColor="#38bdf8" />
-          <stop offset="100%" stopColor="#00f2fe" />
+          <stop offset="35%" stopColor="#0ea5e9" />
+          <stop offset="75%" stopColor="#0369a1" />
+          <stop offset="100%" stopColor="#075985" />
         </linearGradient>
 
-        <linearGradient id="logo-border-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+        {/* Inner Core Gradient */}
+        <linearGradient id="logo-core" x1="0%" y1="0%" x2="0%" y2="100%">
           <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.9" />
-          <stop offset="50%" stopColor="#6366f1" stopOpacity="0.4" />
-          <stop offset="100%" stopColor="#a855f7" stopOpacity="0.9" />
+          <stop offset="100%" stopColor="#0284c7" stopOpacity="0.3" />
         </linearGradient>
+
+        {/* Drop Shadow */}
+        <filter id="logo-shadow" x="-15%" y="-15%" width="130%" height="130%">
+          <feDropShadow dx="0" dy="16" stdDeviation="24" floodColor="#000000" floodOpacity="0.8" />
+        </filter>
+
+        <filter id="logo-glow" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="8" result="blur" />
+          <feComposite in="SourceGraphic" in2="blur" operator="over" />
+        </filter>
       </defs>
 
-      {/* Squircle Tile Canvas */}
+      {/* App Tile Background (Squircle) */}
       <rect
-        x="24"
-        y="24"
-        width="464"
-        height="464"
-        rx="108"
-        fill="url(#logo-bg-grad)"
-        stroke="url(#logo-border-grad)"
-        strokeWidth="6"
+        x="32"
+        y="32"
+        width="448"
+        height="448"
+        rx="112"
+        fill="url(#logo-bg)"
+        stroke="#38bdf8"
+        strokeOpacity="0.25"
+        strokeWidth="3"
+        filter="url(#logo-shadow)"
       />
 
-      {/* Wi-Fi Arcs */}
-      <path
-        d="M 144 154 A 150 150 0 0 1 368 154"
-        stroke="url(#logo-primary-glow)"
-        strokeWidth="18"
-        strokeLinecap="round"
-        opacity="0.6"
-      />
-      <path
-        d="M 182 188 A 102 102 0 0 1 330 188"
-        stroke="url(#logo-primary-glow)"
-        strokeWidth="20"
-        strokeLinecap="round"
-        opacity="0.9"
-      />
+      {/* Ambient Light Reflection in Center */}
+      <circle cx="256" cy="256" r="140" fill="#38bdf8" opacity="0.08" filter="url(#logo-glow)" />
 
-      {/* Center Wi-Fi Hub */}
-      <circle
-        cx="256"
-        cy="226"
-        r="44"
-        fill="#0c1322"
-        stroke="url(#logo-primary-glow)"
-        strokeWidth="20"
-      />
-      <circle cx="256" cy="226" r="14" fill="#00f2fe" />
+      {/* Master Key (45-degree Angled Precision) */}
+      <g transform="rotate(135 256 262)" filter="url(#logo-glow)">
+        {/* 1. Geometric Hex-Rounded Key Head */}
+        <path
+          d="M 226 95 L 286 95 A 70 70 0 0 1 334 142 L 334 186 A 70 70 0 0 1 286 235 L 226 235 A 70 70 0 0 1 178 186 L 178 142 A 70 70 0 0 1 226 95 Z"
+          fill="url(#logo-key)"
+          stroke="#ffffff"
+          strokeWidth="1.5"
+          strokeOpacity="0.4"
+        />
 
-      {/* Key Shaft (Stem) */}
-      <rect
-        x="245"
-        y="248"
-        width="22"
-        height="162"
-        rx="11"
-        fill="url(#logo-primary-glow)"
-      />
+        {/* Inner Geometric Core (Square-Circle blend) */}
+        <rect
+          x="222"
+          y="131"
+          width="68"
+          height="68"
+          rx="20"
+          fill="#0e172a"
+          stroke="url(#logo-core)"
+          strokeWidth="3.5"
+        />
+        <circle cx="256" cy="165" r="12" fill="#38bdf8" opacity="0.85" />
 
-      {/* "t" Crossbar */}
-      <rect
-        x="204"
-        y="292"
-        width="104"
-        height="20"
-        rx="10"
-        fill="url(#logo-primary-glow)"
-      />
+        {/* 2. Stepped Collar */}
+        <rect
+          x="230"
+          y="235"
+          width="52"
+          height="14"
+          rx="4"
+          fill="url(#logo-key)"
+          stroke="#ffffff"
+          strokeWidth="1.2"
+          strokeOpacity="0.5"
+        />
 
-      {/* Teeth */}
-      <rect
-        x="256"
-        y="344"
-        width="48"
-        height="18"
-        rx="9"
-        fill="url(#logo-cyan-glow)"
-      />
-      <rect
-        x="256"
-        y="378"
-        width="36"
-        height="18"
-        rx="9"
-        fill="url(#logo-cyan-glow)"
-      />
+        {/* 3. Key Shaft (Haste Central) */}
+        <rect x="238" y="246" width="36" height="184" rx="6" fill="url(#logo-key)" />
+        {/* Longitudinal Dual Bevel Grooves */}
+        <line x1="250" y1="256" x2="250" y2="420" stroke="#082f49" strokeWidth="3.5" strokeLinecap="round" />
+        <line x1="262" y1="256" x2="262" y2="420" stroke="#bae6fd" strokeWidth="2" strokeLinecap="round" opacity="0.6" />
 
-      {/* 3 Satellite Nodes */}
-      <circle cx="140" cy="396" r="16" fill="#090d16" stroke="#38bdf8" strokeWidth="5" />
-      <circle cx="140" cy="396" r="7" fill="#38bdf8" />
-
-      <circle cx="372" cy="396" r="16" fill="#090d16" stroke="#a855f7" strokeWidth="5" />
-      <circle cx="372" cy="396" r="7" fill="#a855f7" />
-
-      <circle cx="256" cy="442" r="14" fill="#090d16" stroke="#10b981" strokeWidth="5" />
-      <circle cx="256" cy="442" r="6" fill="#10b981" />
+        {/* 4. Angled Precision Teeth (45-degree chamfered bit notches) */}
+        <path
+          d="M 274 316 L 335 316 L 348 329 L 348 344 L 335 344 L 310 344 L 310 360 L 345 360 L 358 373 L 358 392 L 345 392 L 320 392 L 320 406 L 332 406 L 342 416 L 342 426 L 332 426 L 274 426 Z"
+          fill="url(#logo-key)"
+          stroke="#ffffff"
+          strokeWidth="1.2"
+          strokeOpacity="0.4"
+        />
+      </g>
     </svg>
   );
 };

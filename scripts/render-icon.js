@@ -16,6 +16,7 @@ app.whenReady().then(async () => {
 
   const svgPath = path.resolve(__dirname, '../public/tclavis-icon.svg');
   await win.loadFile(svgPath);
+  await new Promise((r) => setTimeout(r, 400));
 
   // Capture full resolution 512x512 image
   const nativeImg = await win.capturePage({ x: 0, y: 0, width: 512, height: 512 });
