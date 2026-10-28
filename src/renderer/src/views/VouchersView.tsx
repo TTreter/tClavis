@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Ticket, Printer, RefreshCw, QrCode, Layers, ShieldCheck } from 'lucide-react';
+import { Ticket, Printer, RefreshCw, QrCode, Layers, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { LogicalGroup, LogicalServer, HotspotUser, RouterDevice } from '../../../shared/types';
 
 interface Props {
@@ -108,6 +108,15 @@ export const VouchersView: React.FC<Props> = ({
         )}
       </div>
 
+      {routers.length === 0 && (
+        <div className="p-4 rounded-2xl bg-accent-amber/10 border border-accent-amber/30 text-accent-amber flex items-center space-x-3">
+          <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+          <div className="text-xs">
+            <strong>Nenhum roteador conectado:</strong> Cadastre ao menos um MikroTik antes de gerar e sincronizar lotes de vouchers.
+          </div>
+        </div>
+      )}
+
       {/* Generator Form */}
       <form onSubmit={handleGenerate} className="bg-surface-card border border-surface-border rounded-2xl p-5 shadow-xl space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -163,8 +172,8 @@ export const VouchersView: React.FC<Props> = ({
         <div className="flex justify-end pt-2">
           <button
             type="submit"
-            disabled={generating}
-            className="px-5 py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-background font-semibold text-sm transition shadow-glow-primary flex items-center space-x-2"
+            disabled={generating || routers.length === 0}
+            className="px-5 py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-background font-semibold text-sm transition shadow-glow-primary flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {generating && <RefreshCw className="w-4 h-4 animate-spin" />}
             <span>Gerar & Sincronizar Vouchers</span>

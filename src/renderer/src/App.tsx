@@ -24,10 +24,13 @@ import { CreateUserModal } from './components/CreateUserModal';
 import { EditUserModal } from './components/EditUserModal';
 import { CreateRouterModal } from './components/CreateRouterModal';
 import { CreateMappingModal } from './components/CreateMappingModal';
+import { EditMappingModal } from './components/EditMappingModal';
+import { ImportUsersModal } from './components/ImportUsersModal';
 import { ParityAuditModal } from './components/ParityAuditModal';
 import { BackupModal } from './components/BackupModal';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { Logo } from './components/Logo';
+import { ImportUsersBatchOptions } from '../../../shared/types';
 
 declare global {
   interface Window {
@@ -49,6 +52,10 @@ export default function App() {
   const [editingUser, setEditingUser] = useState<HotspotUser | null>(null);
   const [isRouterModalOpen, setIsRouterModalOpen] = useState(false);
   const [isMappingModalOpen, setIsMappingModalOpen] = useState(false);
+  const [isEditMappingModalOpen, setIsEditMappingModalOpen] = useState(false);
+  const [editingGroup, setEditingGroup] = useState<LogicalGroup | null>(null);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importRouterId, setImportRouterId] = useState<string | undefined>(undefined);
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
   const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
 
@@ -110,13 +117,20 @@ export default function App() {
         setIsEditUserModalOpen(false);
         setIsRouterModalOpen(false);
         setIsMappingModalOpen(false);
+        setIsEditMappingModalOpen(false);
+        setIsImportModalOpen(false);
         setIsAuditModalOpen(false);
         setIsBackupModalOpen(false);
       }
       // Ctrl+N / Cmd+N: New user
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n' && !e.shiftKey) {
         e.preventDefault();
-        setIsUserModalOpen(true);
+        if (routers.length === 0) {
+          showToast('Adicione ao menos um MikroTik antes de cadastrar usuários.', 'warning');
+          setIsRouterModalOpen(true);
+        } else {
+          setIsUserModalOpen(true);
+        }
       }
       // Ctrl+Shift+A: Parity audit
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'a') {
@@ -225,6 +239,32 @@ export default function App() {
     } catch (err: any) {
       showToast('Erro ao excluir servidor: ' + err.message, 'error');
     }
+  };
+
+  const handleOpenImport = (routerId?: string) => {
+    setImportRouterId(routerId);
+    setIsImportModalOpen(true);
+  };
+
+  const handleImportBatch = async (options: ImportUsersBatchOptions) => {
+    try {
+      if (!window.tclavisAPI?.importUsersBatch) return { importedCount: 0, groupsCreated: 0 };
+      const res = await window.tclavisAPI.importUsersBatch(options);
+      await loadData();
+      showToast(
+        `✅ ${res.importedCount} usuário(s) importados! ${res.groupsCreated > 0 ? `(${res.groupsCreated} novo(s) grupo(s) criado(s))` : ''}`,
+        'success'
+      );
+      return res;
+    } catch (err: any) {
+      showToast('Erro ao importar usuários: ' + err.message, 'error');
+      throw err;
+    }
+  };
+
+  const handleOpenEditGroup = (group: LogicalGroup) => {
+    setEditingGroup(group);
+    setIsEditMappingModalOpen(true);
   };
 
   const handleBatchCreateUsers = async (newUsers: HotspotUser[]) => {
@@ -449,7 +489,14 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => setIsUserModalOpen(true)}
+              onClick={() => {
+                if (routers.length === 0) {
+                  showToast('Adicione ao menos um MikroTik antes de cadastrar usuários.', 'warning');
+                  setIsRouterModalOpen(true);
+                } else {
+                  setIsUserModalOpen(true);
+                }
+              }}
               className="px-4 py-2 rounded-xl bg-primary hover:bg-primary-hover text-background font-semibold text-xs transition shadow-glow-primary flex items-center space-x-1.5"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -466,8 +513,23 @@ export default function App() {
               users={users}
               groups={groups}
               onNavigate={setCurrentView}
-              onOpenCreateUser={() => setIsUserModalOpen(true)}
-              onOpenCreateVoucher={() => setCurrentView('vouchers')}
+              onOpenCreateUser={() => {
+                if (routers.length === 0) {
+                  showToast('Cadastre ao menos um roteador antes de criar usuários.', 'warning');
+                  setIsRouterModalOpen(true);
+                } else {
+                  setIsUserModalOpen(true);
+                }
+              }}
+              onOpenCreateVoucher={() => {
+                if (routers.length === 0) {
+                  showToast('Cadastre ao menos um roteador antes de gerar vouchers.', 'warning');
+                  setIsRouterModalOpen(true);
+                } else {
+                  setCurrentView('vouchers');
+                }
+              }}
+              onOpenCreateRouter={() => setIsRouterModalOpen(true)}
             />
           )}
 
@@ -481,9 +543,11 @@ export default function App() {
                 setEditingUser(user);
                 setIsEditUserModalOpen(true);
               }}
+              onOpenImport={() => handleOpenImport()}
               onDeleteUser={handleDeleteUser}
               onSyncUser={handleSyncUser}
               onSaveUser={handleSaveUser}
+              onNavigateToRouters={() => setCurrentView('routers')}
             />
           )}
 
@@ -493,6 +557,7 @@ export default function App() {
               onOpenCreate={() => setIsRouterModalOpen(true)}
               onDeleteRouter={handleDeleteRouter}
               onTestRouter={handleTestRouter}
+              onOpenImportRouter={(routerId) => handleOpenImport(routerId)}
             />
           )}
 
@@ -502,8 +567,10 @@ export default function App() {
               servers={servers}
               routers={routers}
               onOpenCreateGroupMapping={() => setIsMappingModalOpen(true)}
+              onOpenEditGroup={handleOpenEditGroup}
               onDeleteGroup={handleDeleteGroup}
               onDeleteServer={handleDeleteServer}
+              onNavigateToRouters={() => setCurrentView('routers')}
             />
           )}
 
@@ -570,6 +637,29 @@ export default function App() {
         onSave={handleSaveGroup}
         routers={routers}
         onInspectRouter={(r) => window.tclavisAPI?.inspectRouter(r)}
+      />
+
+      <EditMappingModal
+        isOpen={isEditMappingModalOpen}
+        group={editingGroup}
+        onClose={() => {
+          setIsEditMappingModalOpen(false);
+          setEditingGroup(null);
+        }}
+        onSave={handleSaveGroup}
+        routers={routers}
+        onInspectRouter={(r) => window.tclavisAPI?.inspectRouter(r)}
+      />
+
+      <ImportUsersModal
+        isOpen={isImportModalOpen}
+        onClose={() => {
+          setIsImportModalOpen(false);
+          setImportRouterId(undefined);
+        }}
+        routers={routers}
+        onImportBatch={handleImportBatch}
+        initialRouterId={importRouterId}
       />
 
       <ParityAuditModal

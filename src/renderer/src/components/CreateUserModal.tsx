@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Key, Shield, Clock, HardDrive, RefreshCw, Layers } from 'lucide-react';
+import { X, Key, Shield, Clock, HardDrive, RefreshCw, Layers, AlertTriangle } from 'lucide-react';
 import { HotspotUser, LogicalGroup, LogicalServer, RouterDevice } from '../../../shared/types';
 
 interface Props {
@@ -100,8 +100,27 @@ export const CreateUserModal: React.FC<Props> = ({
           </button>
         </div>
 
-        {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto flex-1">
+        {/* 0 Routers Guard */}
+        {routers.length === 0 ? (
+          <div className="p-8 text-center space-y-3">
+            <AlertTriangle className="w-12 h-12 text-accent-amber mx-auto" />
+            <h3 className="font-bold text-white text-base">Nenhum MikroTik Cadastrado</h3>
+            <p className="text-xs text-slate-400 max-w-sm mx-auto">
+              Para cadastrar usuários no Hotspot, é necessário ter pelo menos um roteador MikroTik configurado no cluster.
+            </p>
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-5 py-2.5 rounded-xl bg-surface hover:bg-surface-border text-white text-xs font-semibold transition"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        ) : (
+          /* Form Body */
+          <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto flex-1">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1">Nome de Usuário / Login *</label>
@@ -129,12 +148,17 @@ export const CreateUserModal: React.FC<Props> = ({
               </div>
               <input
                 type="text"
-                required
-                placeholder="Senha de acesso"
+                placeholder="Senha de acesso (opcional)"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-3 py-2 bg-surface-card border border-surface-border rounded-xl text-white text-sm focus:outline-none focus:border-primary font-mono"
               />
+              {!password.trim() && (
+                <p className="text-[11px] text-accent-amber mt-1 flex items-center space-x-1">
+                  <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+                  <span>Sem senha: login direto sem autenticação por senha.</span>
+                </p>
+              )}
             </div>
           </div>
 
@@ -251,6 +275,7 @@ export const CreateUserModal: React.FC<Props> = ({
             </button>
           </div>
         </form>
+        )}
       </div>
     </div>
   );

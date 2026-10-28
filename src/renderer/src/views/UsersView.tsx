@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Plus, Trash2, RefreshCw, Eye, EyeOff, Shield, Edit3 } from 'lucide-react';
+import { Search, Plus, Trash2, RefreshCw, Eye, EyeOff, Shield, Edit3, DownloadCloud, AlertTriangle, Network } from 'lucide-react';
 import { HotspotUser, LogicalGroup, RouterDevice } from '../../../shared/types';
 
 interface Props {
@@ -8,9 +8,11 @@ interface Props {
   routers: RouterDevice[];
   onOpenCreate: () => void;
   onOpenEdit: (user: HotspotUser) => void;
+  onOpenImport: () => void;
   onDeleteUser: (user: HotspotUser) => Promise<void>;
   onSyncUser: (user: HotspotUser) => Promise<void>;
   onSaveUser: (user: HotspotUser) => Promise<void>;
+  onNavigateToRouters?: () => void;
 }
 
 export const UsersView: React.FC<Props> = ({
@@ -19,9 +21,11 @@ export const UsersView: React.FC<Props> = ({
   routers,
   onOpenCreate,
   onOpenEdit,
+  onOpenImport,
   onDeleteUser,
   onSyncUser,
   onSaveUser,
+  onNavigateToRouters,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedGroupFilter, setSelectedGroupFilter] = useState('ALL');
@@ -55,8 +59,34 @@ export const UsersView: React.FC<Props> = ({
     }
   };
 
+  const hasRouters = routers.length > 0;
+
   return (
     <div className="space-y-4">
+      {/* 0 Routers Warning Banner */}
+      {!hasRouters && (
+        <div className="p-4 rounded-2xl bg-accent-amber/10 border border-accent-amber/30 text-accent-amber flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center space-x-3">
+            <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+            <div>
+              <div className="font-bold text-sm">Nenhum MikroTik cadastrado no tClavis</div>
+              <div className="text-xs text-slate-300">
+                Para criar ou sincronizar usuários de Hotspot, é necessário conectar ao menos um roteador RouterOS.
+              </div>
+            </div>
+          </div>
+          {onNavigateToRouters && (
+            <button
+              onClick={onNavigateToRouters}
+              className="px-4 py-2 rounded-xl bg-accent-amber hover:bg-amber-500 text-background font-semibold text-xs transition flex items-center space-x-1.5 self-start sm:self-auto"
+            >
+              <Network className="w-4 h-4" />
+              <span>Conectar Primeiro MikroTik</span>
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Action Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center space-x-3 flex-1 max-w-md">
@@ -85,13 +115,29 @@ export const UsersView: React.FC<Props> = ({
           </select>
         </div>
 
-        <button
-          onClick={onOpenCreate}
-          className="px-4 py-2 rounded-xl bg-primary hover:bg-primary-hover text-background font-semibold text-sm transition shadow-glow-primary flex items-center space-x-2"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Novo Usuário</span>
-        </button>
+        <div className="flex items-center space-x-2">
+          {hasRouters && (
+            <button
+              onClick={onOpenImport}
+              className="px-4 py-2 rounded-xl bg-surface-card hover:bg-surface-border border border-surface-border text-slate-200 hover:text-white font-semibold text-sm transition flex items-center space-x-2 shadow-lg"
+            >
+              <DownloadCloud className="w-4 h-4 text-primary" />
+              <span>Importar do MikroTik</span>
+            </button>
+          )}
+
+          <button
+            onClick={hasRouters ? onOpenCreate : undefined}
+            disabled={!hasRouters}
+            title={!hasRouters ? 'Cadastre ao menos 1 roteador primeiro' : 'Criar novo usuário'}
+            className={`px-4 py-2 rounded-xl bg-primary hover:bg-primary-hover text-background font-semibold text-sm transition shadow-glow-primary flex items-center space-x-2 ${
+              !hasRouters ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
+          >
+            <Plus className="w-4 h-4" />
+            <span>Novo Usuário</span>
+          </button>
+        </div>
       </div>
 
       {/* Users Table */}
@@ -110,8 +156,46 @@ export const UsersView: React.FC<Props> = ({
           <tbody className="divide-y divide-surface-border text-sm">
             {filteredUsers.length === 0 ? (
               <tr>
-                <td colSpan={6} className="py-12 text-center text-slate-400 text-sm">
-                  Nenhum usuário encontrado.
+                <td colSpan={6} className="py-16 text-center text-slate-400 text-sm">
+                  {!hasRouters ? (
+                    <div className="space-y-3 max-w-sm mx-auto">
+                      <Network className="w-10 h-10 text-slate-600 mx-auto" />
+                      <div className="font-semibold text-white">Nenhum roteador conectado</div>
+                      <div className="text-xs text-slate-400">
+                        Adicione seu primeiro MikroTik para começar a gerenciar e sincronizar contas Hotspot.
+                      </div>
+                      {onNavigateToRouters && (
+                        <button
+                          onClick={onNavigateToRouters}
+                          className="px-4 py-2 rounded-xl bg-primary hover:bg-primary-hover text-background font-semibold text-xs transition shadow-glow-primary"
+                        >
+                          Adicionar MikroTik
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-3 max-w-sm mx-auto">
+                      <DownloadCloud className="w-10 h-10 text-slate-600 mx-auto" />
+                      <div className="font-semibold text-white">Nenhum usuário cadastrado no tClavis</div>
+                      <div className="text-xs text-slate-400">
+                        Você pode criar um novo usuário ou recuperar usuários já existentes no MikroTik.
+                      </div>
+                      <div className="flex items-center justify-center space-x-3 pt-2">
+                        <button
+                          onClick={onOpenImport}
+                          className="px-3.5 py-1.5 rounded-xl bg-surface hover:bg-surface-border border border-surface-border text-slate-200 font-semibold text-xs transition"
+                        >
+                          Importar do MikroTik
+                        </button>
+                        <button
+                          onClick={onOpenCreate}
+                          className="px-3.5 py-1.5 rounded-xl bg-primary hover:bg-primary-hover text-background font-semibold text-xs transition shadow-glow-primary"
+                        >
+                          Criar Novo Usuário
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </td>
               </tr>
             ) : (

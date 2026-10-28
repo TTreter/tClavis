@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, Plus, Trash2, RefreshCw, Tv, Printer, Info } from 'lucide-react';
+import { ShieldCheck, Plus, Trash2, RefreshCw, Tv, Printer, Info, AlertTriangle } from 'lucide-react';
 import { IpBinding, RouterDevice } from '../../../shared/types';
 
 interface Props {
@@ -94,14 +94,25 @@ export const IpBindingView: React.FC<Props> = ({
           </button>
 
           <button
-            onClick={() => setIsModalOpen(true)}
-            className="px-4 py-2 rounded-xl bg-primary hover:bg-primary-hover text-background font-semibold text-sm transition shadow-glow-primary flex items-center space-x-2"
+            onClick={() => routers.length > 0 && setIsModalOpen(true)}
+            disabled={routers.length === 0}
+            title={routers.length === 0 ? 'Cadastre ao menos 1 roteador primeiro' : 'Liberar dispositivo'}
+            className="px-4 py-2 rounded-xl bg-primary hover:bg-primary-hover text-background font-semibold text-sm transition shadow-glow-primary flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Plus className="w-4 h-4" />
             <span>Liberar Dispositivo</span>
           </button>
         </div>
       </div>
+
+      {routers.length === 0 && (
+        <div className="p-4 rounded-2xl bg-accent-amber/10 border border-accent-amber/30 text-accent-amber flex items-center space-x-3">
+          <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+          <div className="text-xs">
+            <strong>Nenhum roteador conectado:</strong> Cadastre ao menos um MikroTik antes de liberar dispositivos por endereço MAC.
+          </div>
+        </div>
+      )}
 
       {/* Info Banner */}
       <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 flex items-center space-x-3 text-xs text-slate-300">
