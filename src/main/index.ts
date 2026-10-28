@@ -6,6 +6,7 @@ import { SyncWorker } from './services/sync-worker';
 import { TrayManager } from './services/tray-manager';
 import { SecurityValidator } from './security/validator';
 import { MndpDiscovery } from './mikrotik/mndp-discovery';
+import { GitHubUpdater } from './updater/githubUpdater';
 import { RouterDevice, LogicalGroup, LogicalServer, HotspotUser, ParityDiscrepancy, IpBinding, ImportUsersBatchOptions } from '../shared/types';
 
 let mainWindow: BrowserWindow | null = null;
@@ -13,6 +14,7 @@ let db: AppDatabase;
 let syncEngine: SyncEngine;
 let syncWorker: SyncWorker;
 let trayManager: TrayManager;
+let updater: GitHubUpdater;
 
 async function createWindow() {
   const iconPath = process.platform === 'win32'
@@ -52,6 +54,14 @@ async function createWindow() {
   } else {
     await mainWindow.loadFile(path.resolve(__dirname, '../../dist/index.html'));
   }
+
+  mainWindow.on('close', (e) => {
+    const minToTray = db ? db.getSetting('minimize_to_tray', 'true') === 'true' : true;
+    if (minToTray && !(app as any).isQuitting) {
+      e.preventDefault();
+      mainWindow?.hide();
+    }
+  });
 
   mainWindow.on('closed', () => {
     mainWindow = null;
@@ -161,6 +171,49 @@ function registerIpcHandlers() {
   ipcMain.handle('logs:get', async (_, limit?: number) => db.getLogs(limit || 100));
   ipcMain.handle('logs:clear', async () => db.clearLogs());
 
+  // Security Master PIN & Session Auth
+  ipcMain.handle('auth:has_pin', async () => db.hasMasterPin());
+  ipcMain.handle('auth:set_pin', async (_, pin: string) => {
+    db.setMasterPin(pin);
+    return true;
+  });
+  ipcMain.handle('auth:verify_pin', async (_, pin: string) => db.verifyMasterPin(pin));
+  ipcMain.handle('auth:change_pin', async (_, oldPin: string, newPin: string) =>
+    db.changeMasterPin(oldPin, newPin)
+  );
+
+  // App Settings
+  ipcMain.handle('settings:get', async () => db.getAllSettings());
+  ipcMain.handle('settings:save', async (_, settings: Record<string, string>) => {
+    db.saveAllSettings(settings);
+    if (settings.startWithWindows !== undefined) {
+      try {
+        app.setLoginItemSettings({
+          openAtLogin: settings.startWithWindows === 'true',
+          path: process.execPath,
+        });
+      } catch (_) {}
+    }
+    return true;
+  });
+
+  // Vouchers Purge (Inactive / Expired)
+  ipcMain.handle('vouchers:find_purgeable', async (_, criteria: any) =>
+    db.findPurgeableVouchers(criteria || {})
+  );
+  ipcMain.handle('vouchers:purge', async (_, userIds: string[]) => {
+    const users = db.getUsers().filter((u) => userIds.includes(u.id));
+    for (const u of users) {
+      await syncEngine.deleteUserFromCluster(u);
+    }
+    db.addLog({
+      level: 'warning',
+      category: 'user',
+      message: `${users.length} vouchers inativos/expirados foram expurgados pelo operador.`,
+    });
+    return users.length;
+  });
+
   // Stats
   ipcMain.handle('stats:get', async () => {
     const routers = db.getRouters();
@@ -182,12 +235,26 @@ function registerIpcHandlers() {
       activeSessionsCount: 0,
     };
   });
+
+  // Auto-Updater via GitHub Releases
+  ipcMain.handle('updater:get_current_version', () => app.getVersion());
+  ipcMain.handle('updater:check', async () => updater.checkForUpdates());
+  ipcMain.handle(
+    'updater:download',
+    async (_, { downloadUrl, assetName }: { downloadUrl: string; assetName: string }) => {
+      return updater.downloadUpdate(downloadUrl, assetName, (progress) => {
+        mainWindow?.webContents.send('updater:progress', progress);
+      });
+    }
+  );
+  ipcMain.handle('updater:install', () => updater.installUpdate());
 }
 
 app.whenReady().then(async () => {
   db = new AppDatabase();
   await db.initialize();
   syncEngine = new SyncEngine(db);
+  updater = new GitHubUpdater();
 
   syncWorker = new SyncWorker(db, syncEngine, () => mainWindow);
   syncWorker.start(30000); // Poll every 30 seconds
@@ -206,6 +273,10 @@ app.whenReady().then(async () => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+});
+
+app.on('before-quit', () => {
+  (app as any).isQuitting = true;
 });
 
 app.on('window-all-closed', () => {

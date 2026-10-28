@@ -156,6 +156,11 @@ export class AppDatabase {
         details TEXT
       );
 
+      CREATE TABLE IF NOT EXISTS app_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+
       -- High-Performance Search & Foreign Key Indexes
       CREATE INDEX IF NOT EXISTS idx_users_group ON hotspot_users(logical_group_id);
       CREATE INDEX IF NOT EXISTS idx_users_username ON hotspot_users(username);
@@ -892,10 +897,104 @@ export class AppDatabase {
     this.save();
   }
 
+  // --- App Settings & Security PIN ---
+  public getSetting(key: string, defaultValue = ''): string {
+    if (!this.db) return defaultValue;
+    const res = this.db.exec("SELECT value FROM app_settings WHERE key = ?;", [key]);
+    if (res.length > 0 && res[0].values.length > 0) {
+      return (res[0].values[0][0] as string) || defaultValue;
+    }
+    return defaultValue;
+  }
+
+  public setSetting(key: string, value: string): void {
+    if (!this.db) return;
+    this.db.run("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?);", [key, value]);
+    this.save();
+  }
+
+  public hasMasterPin(): boolean {
+    const hash = this.getSetting('master_pin_hash');
+    return Boolean(hash && hash.length > 0);
+  }
+
+  public setMasterPin(pin: string): void {
+    if (!pin || pin.trim().length < 4) {
+      throw new Error('O PIN deve conter no mínimo 4 dígitos.');
+    }
+    const { hash, salt } = CredentialVault.hashPin(pin.trim());
+    this.setSetting('master_pin_hash', hash);
+    this.setSetting('master_pin_salt', salt);
+    this.addLog({
+      level: 'info',
+      category: 'security',
+      message: 'PIN Mestre de Segurança configurado no tClavis.',
+    });
+  }
+
+  public verifyMasterPin(pin: string): boolean {
+    const storedHash = this.getSetting('master_pin_hash');
+    const storedSalt = this.getSetting('master_pin_salt');
+    if (!storedHash || !storedSalt) return false;
+    return CredentialVault.verifyPin(pin.trim(), storedHash, storedSalt);
+  }
+
+  public changeMasterPin(oldPin: string, newPin: string): boolean {
+    if (!this.verifyMasterPin(oldPin)) {
+      throw new Error('O PIN atual informado está incorreto.');
+    }
+    this.setMasterPin(newPin);
+    return true;
+  }
+
+  public getAllSettings(): Record<string, string> {
+    return {
+      hasMasterPin: String(this.hasMasterPin()),
+      pinTimeoutMinutes: this.getSetting('pin_timeout_minutes', '5'),
+      startWithWindows: this.getSetting('start_with_windows', 'false'),
+      minimizeToTray: this.getSetting('minimize_to_tray', 'true'),
+    };
+  }
+
+  public saveAllSettings(settings: Record<string, string>): void {
+    if (settings.pinTimeoutMinutes) {
+      this.setSetting('pin_timeout_minutes', settings.pinTimeoutMinutes);
+    }
+    if (settings.startWithWindows !== undefined) {
+      this.setSetting('start_with_windows', settings.startWithWindows);
+    }
+    if (settings.minimizeToTray !== undefined) {
+      this.setSetting('minimize_to_tray', settings.minimizeToTray);
+    }
+  }
+
+  // --- Vouchers Purge (Inactive / Expired) ---
+  public findPurgeableVouchers(criteria: {
+    olderThanDays?: number;
+    unusedOnly?: boolean;
+    expiredOnly?: boolean;
+  }): HotspotUser[] {
+    const users = this.getUsers();
+    const daysLimit = criteria.olderThanDays ?? 30;
+    const cutoffTimestamp = Date.now() - daysLimit * 24 * 60 * 60 * 1000;
+
+    return users.filter((u) => {
+      const isVoucher =
+        u.id.startsWith('vch_') ||
+        u.username.toUpperCase().startsWith('HOT-') ||
+        (u.comment && u.comment.toLowerCase().includes('voucher'));
+
+      if (!isVoucher) return false;
+
+      const createdTime = new Date(u.createdAt).getTime();
+      return createdTime <= cutoffTimestamp;
+    });
+  }
+
   // --- Backup & Restore ---
   public exportBackup(passphrase?: string): string {
     const backupData = {
-      version: '2.0.0',
+      version: '2.1.0',
       exportedAt: new Date().toISOString(),
       routers: this.getRouters(),
       groups: this.getGroups(),

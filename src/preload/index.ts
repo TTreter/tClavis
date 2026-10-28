@@ -89,6 +89,56 @@ export const tclavisAPI = {
     ipcRenderer.invoke('logs:get', limit),
   clearLogs: (): Promise<void> => ipcRenderer.invoke('logs:clear'),
 
+  // Master PIN & Auth
+  hasMasterPin: (): Promise<boolean> => ipcRenderer.invoke('auth:has_pin'),
+  setMasterPin: (pin: string): Promise<boolean> => ipcRenderer.invoke('auth:set_pin', pin),
+  verifyMasterPin: (pin: string): Promise<boolean> => ipcRenderer.invoke('auth:verify_pin', pin),
+  changeMasterPin: (oldPin: string, newPin: string): Promise<boolean> =>
+    ipcRenderer.invoke('auth:change_pin', oldPin, newPin),
+
+  // Settings
+  getSettings: (): Promise<Record<string, string>> => ipcRenderer.invoke('settings:get'),
+  saveSettings: (settings: Record<string, string>): Promise<boolean> =>
+    ipcRenderer.invoke('settings:save', settings),
+
+  // Vouchers Purge
+  findPurgeableVouchers: (criteria: any): Promise<HotspotUser[]> =>
+    ipcRenderer.invoke('vouchers:find_purgeable', criteria),
+  purgeVouchers: (userIds: string[]): Promise<number> =>
+    ipcRenderer.invoke('vouchers:purge', userIds),
+
+  // Auto-Updater (GitHub Releases)
+  getCurrentVersion: (): Promise<string> => ipcRenderer.invoke('updater:get_current_version'),
+  checkForUpdates: (): Promise<{
+    hasUpdate: boolean;
+    currentVersion: string;
+    latestVersion: string;
+    releaseName: string;
+    releaseNotes: string;
+    publishedAt: string;
+    downloadUrl?: string;
+    assetName?: string;
+    assetSize?: number;
+  }> => ipcRenderer.invoke('updater:check'),
+  downloadUpdate: (options: {
+    downloadUrl: string;
+    assetName: string;
+  }): Promise<{ success: boolean; filePath?: string; error?: string }> =>
+    ipcRenderer.invoke('updater:download', options),
+  installUpdate: (): Promise<boolean> => ipcRenderer.invoke('updater:install'),
+  onUpdateProgress: (
+    callback: (progress: {
+      percentage: number;
+      transferredBytes: number;
+      totalBytes: number;
+      speedBytesPerSec: number;
+    }) => void
+  ) => {
+    const handler = (_event: any, progress: any) => callback(progress);
+    ipcRenderer.on('updater:progress', handler);
+    return () => ipcRenderer.removeListener('updater:progress', handler);
+  },
+
   // System Stats
   getStats: (): Promise<any> => ipcRenderer.invoke('stats:get'),
 

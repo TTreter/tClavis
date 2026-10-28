@@ -11,6 +11,9 @@ import {
   ShieldAlert,
   ShieldCheck,
   Tv,
+  Settings,
+  Lock,
+  Unlock,
 } from 'lucide-react';
 import { RouterDevice, HotspotUser, LogicalGroup, LogicalServer, ParityDiscrepancy, IpBinding, ImportUsersBatchOptions } from '../../shared/types';
 import { DashboardView } from './views/DashboardView';
@@ -20,6 +23,7 @@ import { MappingView } from './views/MappingView';
 import { ActiveSessionsView } from './views/ActiveSessionsView';
 import { VouchersView } from './views/VouchersView';
 import { IpBindingView } from './views/IpBindingView';
+import { SettingsView } from './views/SettingsView';
 import { CreateUserModal } from './components/CreateUserModal';
 import { EditUserModal } from './components/EditUserModal';
 import { CreateRouterModal } from './components/CreateRouterModal';
@@ -28,6 +32,9 @@ import { EditMappingModal } from './components/EditMappingModal';
 import { ImportUsersModal } from './components/ImportUsersModal';
 import { ParityAuditModal } from './components/ParityAuditModal';
 import { BackupModal } from './components/BackupModal';
+import { PinSetupModal } from './components/PinSetupModal';
+import { PinPromptModal } from './components/PinPromptModal';
+import { VoucherPurgeModal } from './components/VoucherPurgeModal';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { Logo } from './components/Logo';
 
@@ -58,6 +65,16 @@ export default function App() {
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
   const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
 
+  // Security & Master PIN Session State
+  const [isPinSet, setIsPinSet] = useState(true);
+  const [isPinSetupOpen, setIsPinSetupOpen] = useState(false);
+  const [isPinPromptOpen, setIsPinPromptOpen] = useState(false);
+  const [unlockedUntil, setUnlockedUntil] = useState(0);
+  const [pinTimeoutMinutes, setPinTimeoutMinutes] = useState(5);
+  const [pendingAction, setPendingAction] = useState<(() => Promise<void> | void) | null>(null);
+  const [isPurgeModalOpen, setIsPurgeModalOpen] = useState(false);
+  const [remainingTime, setRemainingTime] = useState(0);
+
   // Toast notifications state
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
@@ -73,8 +90,95 @@ export default function App() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
+  // Check PIN setup and app settings
+  const checkPinSetup = async () => {
+    try {
+      if (window.tclavisAPI?.hasMasterPin) {
+        const hasPin = await window.tclavisAPI.hasMasterPin();
+        setIsPinSet(hasPin);
+        if (!hasPin) {
+          setIsPinSetupOpen(true);
+        }
+      }
+      if (window.tclavisAPI?.getSettings) {
+        const settings = await window.tclavisAPI.getSettings();
+        if (settings?.pin_timeout_minutes) {
+          setPinTimeoutMinutes(Number(settings.pin_timeout_minutes) || 5);
+        }
+      }
+    } catch (err) {
+      console.error('Falha ao verificar PIN:', err);
+    }
+  };
+
+  // Session timer countdown ticker
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = Date.now();
+      if (unlockedUntil > now) {
+        setRemainingTime(Math.ceil((unlockedUntil - now) / 1000));
+      } else {
+        if (unlockedUntil !== 0) {
+          setUnlockedUntil(0);
+          showToast('Sessão autorizada expirou. As edições foram bloqueadas.', 'info');
+        }
+        setRemainingTime(0);
+      }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [unlockedUntil]);
+
+  const isSessionUnlocked = Date.now() < unlockedUntil;
+
+  const requireAuth = (action: () => void | Promise<void>): Promise<void> => {
+    return new Promise((resolve) => {
+      const execute = async () => {
+        try {
+          await action();
+        } finally {
+          resolve();
+        }
+      };
+
+      if (!isPinSet) {
+        setIsPinSetupOpen(true);
+        resolve();
+        return;
+      }
+      if (Date.now() < unlockedUntil) {
+        execute();
+        return;
+      }
+      setPendingAction(() => execute);
+      setIsPinPromptOpen(true);
+    });
+  };
+
+  const handlePinSuccess = (timeoutMins: number) => {
+    const durationMs = timeoutMins > 0 ? timeoutMins * 60 * 1000 : 0;
+    setUnlockedUntil(Date.now() + durationMs);
+    setIsPinPromptOpen(false);
+    showToast(
+      timeoutMins > 0
+        ? `Sessão desbloqueada por ${timeoutMins} minutos.`
+        : 'Ação autorizada.',
+      'success'
+    );
+    if (pendingAction) {
+      const act = pendingAction;
+      setPendingAction(null);
+      act();
+    }
+  };
+
+  const handleManualLock = () => {
+    setUnlockedUntil(0);
+    showToast('Sessão bloqueada manualmente.', 'info');
+  };
+
   // Load all initial data
   const loadData = async () => {
+    checkPinSetup();
     if (!window.tclavisAPI) return;
     try {
       const [r, u, g, s] = await Promise.all([
@@ -497,6 +601,18 @@ export default function App() {
               <ShieldCheck className="w-4 h-4 text-accent-emerald" />
               <span>Dispositivos (Bypass)</span>
             </button>
+
+            <button
+              onClick={() => setCurrentView('settings')}
+              className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition ${
+                currentView === 'settings'
+                  ? 'bg-primary/10 text-primary border border-primary/20 shadow-glow-primary'
+                  : 'text-slate-400 hover:text-white hover:bg-surface-card'
+              }`}
+            >
+              <Settings className="w-4 h-4" />
+              <span>Configurações</span>
+            </button>
           </nav>
         </div>
 
@@ -518,7 +634,7 @@ export default function App() {
           </button>
 
           <div className="text-[10px] text-slate-500 font-mono text-center pt-1">
-            tClavis v2.0.0 Desktop • RouterOS
+            tClavis v2.1.0 Desktop • RouterOS
           </div>
         </div>
       </aside>
@@ -536,6 +652,32 @@ export default function App() {
           </div>
 
           <div className="flex items-center space-x-3">
+            {/* Session Lock Indicator */}
+            {isSessionUnlocked ? (
+              <div className="flex items-center space-x-2 bg-accent-emerald/10 border border-accent-emerald/30 text-accent-emerald px-3 py-1.5 rounded-xl text-xs font-semibold">
+                <Unlock className="w-3.5 h-3.5 animate-pulse" />
+                <span>
+                  Autorizado ({Math.floor(remainingTime / 60)}:
+                  {String(remainingTime % 60).padStart(2, '0')})
+                </span>
+                <button
+                  onClick={handleManualLock}
+                  title="Bloquear agora"
+                  className="ml-1 text-[10px] bg-accent-emerald/20 hover:bg-accent-emerald/30 px-1.5 py-0.5 rounded text-accent-emerald hover:text-white transition"
+                >
+                  Bloquear
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setIsPinPromptOpen(true)}
+                className="flex items-center space-x-1.5 bg-surface-card hover:bg-surface-border border border-surface-border text-slate-300 hover:text-white px-3 py-1.5 rounded-xl text-xs font-semibold transition"
+              >
+                <Lock className="w-3.5 h-3.5 text-accent-amber" />
+                <span>Bloqueado (PIN)</span>
+              </button>
+            )}
+
             <button
               onClick={() => setIsAuditModalOpen(true)}
               className="px-3.5 py-1.5 rounded-xl bg-accent-amber/10 hover:bg-accent-amber/20 border border-accent-amber/30 text-accent-amber text-xs font-semibold transition flex items-center space-x-1.5"
@@ -553,14 +695,16 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => {
-                if (routers.length === 0) {
-                  showToast('Adicione ao menos um MikroTik antes de cadastrar usuários.', 'warning');
-                  setIsRouterModalOpen(true);
-                } else {
-                  setIsUserModalOpen(true);
-                }
-              }}
+              onClick={() =>
+                requireAuth(() => {
+                  if (routers.length === 0) {
+                    showToast('Adicione ao menos um MikroTik antes de cadastrar usuários.', 'warning');
+                    setIsRouterModalOpen(true);
+                  } else {
+                    setIsUserModalOpen(true);
+                  }
+                })
+              }
               className="px-4 py-2 rounded-xl bg-primary hover:bg-primary-hover text-background font-semibold text-xs transition shadow-glow-primary flex items-center space-x-1.5"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -602,28 +746,32 @@ export default function App() {
               users={users}
               groups={groups}
               routers={routers}
-              onOpenCreate={() => setIsUserModalOpen(true)}
+              onOpenCreate={() => requireAuth(() => setIsUserModalOpen(true))}
               onOpenEdit={(user) => {
-                setEditingUser(user);
-                setIsEditUserModalOpen(true);
+                requireAuth(() => {
+                  setEditingUser(user);
+                  setIsEditUserModalOpen(true);
+                });
               }}
               onOpenImport={() => handleOpenImport()}
-              onDeleteUser={handleDeleteUser}
+              onDeleteUser={(user) => requireAuth(() => handleDeleteUser(user))}
               onSyncUser={handleSyncUser}
               onSaveUser={handleSaveUser}
               onNavigateToRouters={() => setCurrentView('routers')}
-              onBatchDeleteUsers={handleBatchDeleteUsers}
+              onBatchDeleteUsers={(users) => requireAuth(() => handleBatchDeleteUsers(users))}
               onBatchSyncUsers={handleBatchSyncUsers}
-              onBatchUpdateGroup={handleBatchUpdateGroup}
-              onBatchToggleDisabled={handleBatchToggleDisabled}
+              onBatchUpdateGroup={(users, gId) => requireAuth(() => handleBatchUpdateGroup(users, gId))}
+              onBatchToggleDisabled={(users, d) => requireAuth(() => handleBatchToggleDisabled(users, d))}
+              requireAuth={requireAuth}
+              isUnlocked={isSessionUnlocked}
             />
           )}
 
           {currentView === 'routers' && (
             <RoutersView
               routers={routers}
-              onOpenCreate={() => setIsRouterModalOpen(true)}
-              onDeleteRouter={handleDeleteRouter}
+              onOpenCreate={() => requireAuth(() => setIsRouterModalOpen(true))}
+              onDeleteRouter={(id) => requireAuth(() => handleDeleteRouter(id))}
               onTestRouter={handleTestRouter}
               onOpenImportRouter={(routerId) => handleOpenImport(routerId)}
             />
@@ -634,10 +782,10 @@ export default function App() {
               groups={groups}
               servers={servers}
               routers={routers}
-              onOpenCreateGroupMapping={() => setIsMappingModalOpen(true)}
-              onOpenEditGroup={handleOpenEditGroup}
-              onDeleteGroup={handleDeleteGroup}
-              onDeleteServer={handleDeleteServer}
+              onOpenCreateGroupMapping={() => requireAuth(() => setIsMappingModalOpen(true))}
+              onOpenEditGroup={(group) => requireAuth(() => handleOpenEditGroup(group))}
+              onDeleteGroup={(id) => requireAuth(() => handleDeleteGroup(id))}
+              onDeleteServer={(id) => requireAuth(() => handleDeleteServer(id))}
               onNavigateToRouters={() => setCurrentView('routers')}
             />
           )}
@@ -654,7 +802,7 @@ export default function App() {
               groups={groups}
               servers={servers}
               routers={routers}
-              onBatchCreateUsers={handleBatchCreateUsers}
+              onBatchCreateUsers={(users) => requireAuth(() => handleBatchCreateUsers(users))}
             />
           )}
 
@@ -664,6 +812,14 @@ export default function App() {
               onFetchBindings={handleFetchBindings}
               onSaveBinding={handleSaveBinding}
               onDeleteBinding={handleDeleteBinding}
+            />
+          )}
+
+          {currentView === 'settings' && (
+            <SettingsView
+              onOpenPurgeModal={() => requireAuth(() => setIsPurgeModalOpen(true))}
+              onShowToast={showToast}
+              requireAuth={requireAuth}
             />
           )}
         </main>
@@ -745,6 +901,34 @@ export default function App() {
         onImport={(json, pass) => window.tclavisAPI?.importBackup(json, pass)}
         onNotify={showToast}
         onRefreshData={loadData}
+      />
+
+      <PinSetupModal
+        isOpen={isPinSetupOpen}
+        onPinConfigured={() => {
+          setIsPinSetupOpen(false);
+          setIsPinSet(true);
+          showToast('PIN Mestre configurado com sucesso! Guarde-o com segurança.', 'success');
+        }}
+      />
+
+      <PinPromptModal
+        isOpen={isPinPromptOpen}
+        timeoutMinutes={pinTimeoutMinutes}
+        onSuccess={handlePinSuccess}
+        onClose={() => {
+          setIsPinPromptOpen(false);
+          setPendingAction(null);
+        }}
+      />
+
+      <VoucherPurgeModal
+        isOpen={isPurgeModalOpen}
+        onClose={() => setIsPurgeModalOpen(false)}
+        onPurged={(count) => {
+          showToast(`${count} vouchers obsoletos foram expurgados com sucesso!`, 'success');
+          loadData();
+        }}
       />
 
       {/* Floating Notifications */}

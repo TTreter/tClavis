@@ -1,6 +1,6 @@
 {
   "name": "tclavis",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "tClavis - MikroTik Hotspot Multi-Router Sync Manager",
   "author": "Tiago Treter",
   "main": "dist-electron/main/index.js",

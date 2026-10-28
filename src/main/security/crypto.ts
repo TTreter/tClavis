@@ -143,4 +143,31 @@ export class CredentialVault {
       throw new Error('Senha incorreta ou arquivo de backup corrompido.');
     }
   }
+
+  /**
+   * Hashes a Master PIN using a 16-byte cryptographic salt and Scrypt key derivation.
+   */
+  public static hashPin(pin: string, existingSalt?: string): { hash: string; salt: string } {
+    const salt = existingSalt ? Buffer.from(existingSalt, 'hex') : crypto.randomBytes(16);
+    const derivedKey = crypto.scryptSync(pin, salt, 32);
+    return {
+      hash: derivedKey.toString('hex'),
+      salt: salt.toString('hex'),
+    };
+  }
+
+  /**
+   * Constant-time verification of a candidate PIN against stored hash & salt.
+   */
+  public static verifyPin(pin: string, storedHash: string, storedSalt: string): boolean {
+    if (!pin || !storedHash || !storedSalt) return false;
+    try {
+      const candidate = this.hashPin(pin, storedSalt);
+      const bufA = Buffer.from(candidate.hash, 'hex');
+      const bufB = Buffer.from(storedHash, 'hex');
+      return bufA.length === bufB.length && crypto.timingSafeEqual(bufA, bufB);
+    } catch {
+      return false;
+    }
+  }
 }

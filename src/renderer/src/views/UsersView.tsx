@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Search,
   Plus,
@@ -42,6 +42,8 @@ interface Props {
   onBatchSyncUsers?: (users: HotspotUser[]) => Promise<void>;
   onBatchUpdateGroup?: (users: HotspotUser[], groupId: string) => Promise<void>;
   onBatchToggleDisabled?: (users: HotspotUser[], disabled: boolean) => Promise<void>;
+  requireAuth?: (action: () => void) => void;
+  isUnlocked?: boolean;
 }
 
 export const UsersView: React.FC<Props> = ({
@@ -59,6 +61,8 @@ export const UsersView: React.FC<Props> = ({
   onBatchSyncUsers,
   onBatchUpdateGroup,
   onBatchToggleDisabled,
+  requireAuth,
+  isUnlocked,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedGroupFilter, setSelectedGroupFilter] = useState('ALL');
@@ -76,8 +80,26 @@ export const UsersView: React.FC<Props> = ({
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState<number>(25);
 
+  // Reset revealed passwords when session locks
+  useEffect(() => {
+    if (!isUnlocked) {
+      setRevealedPasswords({});
+    }
+  }, [isUnlocked]);
+
   const togglePasswordVisibility = (userId: string) => {
-    setRevealedPasswords((prev) => ({ ...prev, [userId]: !prev[userId] }));
+    const isCurrentlyRevealed = !!revealedPasswords[userId];
+    if (isCurrentlyRevealed) {
+      setRevealedPasswords((prev) => ({ ...prev, [userId]: false }));
+    } else {
+      if (requireAuth) {
+        requireAuth(() => {
+          setRevealedPasswords((prev) => ({ ...prev, [userId]: true }));
+        });
+      } else {
+        setRevealedPasswords((prev) => ({ ...prev, [userId]: true }));
+      }
+    }
   };
 
   // Filtered list
