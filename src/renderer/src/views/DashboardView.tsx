@@ -208,6 +208,24 @@ export const DashboardView: React.FC<Props> = ({
                   <div className="text-xs text-slate-400 font-mono space-y-1">
                     <div>Host: {router.host}:{router.port}</div>
                     <div>Versão: {router.routerOsVersion || 'RouterOS'}</div>
+                    {router.cpuLoad !== undefined && (
+                      <div className="pt-1">
+                        <div className="flex justify-between text-[11px] font-sans text-slate-400 mb-1">
+                          <span>Uso de CPU</span>
+                          <span className={router.cpuLoad > 75 ? 'text-accent-rose font-bold' : 'text-accent-emerald'}>
+                            {router.cpuLoad}%
+                          </span>
+                        </div>
+                        <div className="w-full bg-surface h-1.5 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full transition-all duration-500 ${
+                              router.cpuLoad > 75 ? 'bg-accent-rose' : router.cpuLoad > 40 ? 'bg-accent-amber' : 'bg-accent-emerald'
+                            }`}
+                            style={{ width: `${Math.min(100, Math.max(5, router.cpuLoad))}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 

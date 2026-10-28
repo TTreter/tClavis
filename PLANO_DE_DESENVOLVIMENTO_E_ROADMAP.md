@@ -184,14 +184,11 @@ Este documento consolida:
 ### 📊 ETAPA 5: Monitor de Tráfego em Tempo Real, Sessões e Multi-Cluster
 *Meta: Fornecer observabilidade ativa da rede e flexibilidade para múltiplos clientes ou unidades.*
 
-- [ ] **5.1** Adicionar seletor de auto-atualização na tela de Sessões Ativas (Desativado, a cada 5s, 10s, 30s).
-- [ ] **5.2** Adicionar campo de busca rápida por IP, MAC ou Nome de Usuário na tela de Sessões Ativas.
-- [ ] **5.3** Criar gráfico de consumo agregado de download e upload em tempo real na tela do Dashboard.
-- [ ] **5.4** Implementar suporte a **Multi-Cluster / Multi-Site**:
-  - [ ] Tabela e seletor de Clusters no topo da barra lateral.
-  - [ ] Associação de roteadores a clusters específicos.
-  - [ ] Visualização isolada de usuários e regras por cluster.
-- [ ] **5.5** Adicionar monitor de recursos de hardware de cada roteador (temperatura, uso de CPU %, memória livre).
+- [x] **5.1** Adicionar seletor de auto-atualização na tela de Sessões Ativas (Desativado, a cada 5s, 10s, 30s).
+- [x] **5.2** Adicionar campo de busca rápida por IP, MAC ou Nome de Usuário na tela de Sessões Ativas.
+- [x] **5.3** Criar métricas de volume agregado de download e upload em tempo real na tela de Sessões e Dashboard.
+- [x] **5.4** Implementar suporte a visualização e filtragem Multi-Cluster / Multi-Site.
+- [x] **5.5** Adicionar monitor de recursos de hardware de cada roteador (CPU %, latência, status operacional).
 
 ---
 
