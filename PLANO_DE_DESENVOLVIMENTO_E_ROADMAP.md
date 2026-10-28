@@ -144,14 +144,14 @@ Este documento consolida:
 ### 🖨️ ETAPA 2: Módulo Avançado de Vouchers, Impressão Térmica e QR Code Real
 *Meta: Transformar a emissão de vouchers em uma ferramenta completa para recepção, hotéis e comércios.*
 
-- [ ] **2.1** Integrar biblioteca de renderização de QR Code (`qrcode` / `@types/qrcode`) no bundle do Renderer.
-- [ ] **2.2** Gerar QR Code real em cada cartão de voucher contendo o link de autenticação direta ou dados da rede Wi-Fi.
-- [ ] **2.3** Criar template de impressão térmica para bobinas de **58mm** (mini impressoras POS USB/Bluetooth).
-- [ ] **2.4** Criar template de impressão térmica para bobinas de **80mm** (padrão Bematech, Elgin, Epson).
-- [ ] **2.5** Criar seletor de layout no cabeçalho: "Bobina Térmica 58mm", "Bobina Térmica 80mm" e "Folha A4 em Grade (Cartões)".
-- [ ] **2.6** Incluir personalização do cabeçalho do voucher: Nome da Empresa, Nome da Rede Wi-Fi (SSID) e Termos de Uso.
-- [ ] **2.7** Adicionar botão de exportação da lista de vouchers em formato **CSV** e **PDF**.
-- [ ] **2.8** Permitir expiração do voucher por data/hora fixa além do limite por tempo de uso (`limit-uptime`).
+- [x] **2.1** Integrar biblioteca de renderização de QR Code (`qrcode` / `@types/qrcode`) no bundle do Renderer.
+- [x] **2.2** Gerar QR Code real em cada cartão de voucher contendo o link de autenticação direta ou dados da rede Wi-Fi.
+- [x] **2.3** Criar template de impressão térmica para bobinas de **58mm** (mini impressoras POS USB/Bluetooth).
+- [x] **2.4** Criar template de impressão térmica para bobinas de **80mm** (padrão Bematech, Elgin, Epson).
+- [x] **2.5** Criar seletor de layout no cabeçalho: "Bobina Térmica 58mm", "Bobina Térmica 80mm" e "Folha A4 em Grade (Cartões)".
+- [x] **2.6** Incluir personalização do cabeçalho do voucher: Nome da Empresa, Nome da Rede Wi-Fi (SSID) e Termos de Uso.
+- [x] **2.7** Adicionar botão de exportação da lista de vouchers em formato **CSV** e **PDF**.
+- [x] **2.8** Permitir expiração do voucher por data/hora fixa além do limite por tempo de uso (`limit-uptime`).
 
 ---
 
