@@ -13,6 +13,9 @@
   <a href="https://github.com/TTreter/tClavis/releases/latest">
     <img src="https://img.shields.io/github/v/release/TTreter/tClavis?style=for-the-badge&color=00f2fe&logo=github" alt="Latest Release" />
   </a>
+  <a href="https://github.com/TTreter/tClavis/wiki">
+    <img src="https://img.shields.io/badge/Wiki-Documenta%C3%A7%C3%A3o-brightgreen?style=for-the-badge&logo=bookstack&logoColor=white" alt="Wiki Oficial" />
+  </a>
   <a href="LICENSE">
     <img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="License MIT" />
   </a>
